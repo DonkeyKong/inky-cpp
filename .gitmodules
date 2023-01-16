@@ -1,0 +1,12 @@
+[submodule "deps/libpng"]
+	path = deps/libpng
+	url = https://github.com/glennrp/libpng.git
+[submodule "deps/QR-Code-generator"]
+	path = deps/QR-Code-generator
+	url = https://github.com/nayuki/QR-Code-generator.git
+[submodule "deps/eigen"]
+	path = deps/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+[submodule "deps/single-header-image-resampler"]
+	path = deps/single-header-image-resampler
+	url = https://github.com/DonkeyKong/single-header-image-resampler.git
