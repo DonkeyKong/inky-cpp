@@ -10,7 +10,9 @@ enum class InkyColor : uint8_t
   Yellow = 2
 };
 
+#pragma pack(push, 1)
 struct RGBAColor;
+struct HSVColor;
 struct HSVColor
 {
   float H = 0.0f;
@@ -28,8 +30,8 @@ struct RGBAColor
   uint8_t B = 0;
   uint8_t A = 255;
 
-  HSVColor toHSV();
-  uint8_t getBrightestChannel();
-  uint8_t getGreyValue();
+  HSVColor toHSV() const;
+  uint8_t getBrightestChannel() const;
+  uint8_t getGrayValue() const;
 };
-
+#pragma pack(pop)

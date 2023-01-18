@@ -21,6 +21,7 @@ set(PNG_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/deps/libpng
 add_executable( ${PROJECT_NAME} 
                     src/Color.cpp
                     src/Image.cpp
+                    src/Dither.cpp
                     src/Inky.cpp
                     src/I2CDevice.cpp
                     deps/QR-Code-generator/cpp/qrcodegen.cpp

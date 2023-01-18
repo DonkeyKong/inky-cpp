@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 RGBAColor HSVColor::toRGB()
 {
@@ -54,7 +55,7 @@ RGBAColor HSVColor::toRGB()
   };
 }
 
-HSVColor RGBAColor::toHSV()
+HSVColor RGBAColor::toHSV() const
 {
     HSVColor hsv;
 
@@ -90,12 +91,12 @@ HSVColor RGBAColor::toHSV()
     return hsv;
 }
 
-uint8_t RGBAColor::getBrightestChannel()
+uint8_t RGBAColor::getBrightestChannel() const
 {
   return std::max(R, std::max(G, B));
 }
 
-uint8_t RGBAColor::getGreyValue()
+uint8_t RGBAColor::getGrayValue() const
 {
   return (uint8_t)(0.299f * (float)R + 0.587f * (float)G + 0.114f * (float)B);
 }

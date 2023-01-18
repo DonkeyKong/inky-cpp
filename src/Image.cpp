@@ -1,4 +1,5 @@
-#include <Image.hpp>
+#include "Image.hpp"
+#include "Dither.hpp"
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -47,7 +48,7 @@ int Image::bytesPerPixel() const
   return format_ == ImageFormat::RGBA ? 4 : 1;
 }
 
-void Image::convert(ImageFormat format, ImageConvertMode mode, Image* dest)
+void Image::convert(ImageFormat format, ImageConversionSettings settings, Image* dest)
 {
   if (dest == nullptr) dest = this;
 
@@ -73,50 +74,23 @@ void Image::convert(ImageFormat format, ImageConvertMode mode, Image* dest)
   // Conversion type 1: RGBA to BW/BWR/BWY
   else if (format_ == ImageFormat::RGBA)
   {
-    // Create the new Inky-sized data buffer
-    std::vector<uint8_t> dataInky(width_ * height_);
-    RGBAColor* dataColor = (RGBAColor*)data_.data();
+    Image inkyImage(width_, height_, format);
 
-    // Iterate over all the color data, just converting to black and white
-    for (int i=0; i < dataInky.size(); ++i)
+    if (settings.convertMode == ImageConvertMode::NoDither)
     {
-      if (dataColor[i].getGreyValue() > 80)
-      {
-        dataInky[i] = (uint8_t)InkyColor::White;
-      }
-      else
-      {
-        dataInky[i] = (uint8_t)InkyColor::Black;
-      }
+      fixedThresh(*this, inkyImage, settings.grayThreshhold);
+    }
+    else if (settings.convertMode == ImageConvertMode::PatternDither)
+    {
+      patternDither(*this, inkyImage);
+    }
+    else if (settings.convertMode == ImageConvertMode::DiffusionDither)
+    {
+      diffusionDither(*this, inkyImage, settings.saturationBias);
     }
 
-    // Add red accents
-    if (format == ImageFormat::InkyBWR)
-    {
-      for (int i=0; i < dataInky.size(); ++i)
-      {
-        HSVColor c = dataColor[i].toHSV();
-        if ((c.H > 340.0f || c.H < 20.0f ) && (c.S > 0.5f) && (c.V > 0.25f))
-        {
-          dataInky[i] = (uint8_t)InkyColor::Red;
-        }
-      }
-    }
-    
-    // Add yellow accents
-    if (format == ImageFormat::InkyBWY)
-    {
-      for (int i=0; i < dataInky.size(); ++i)
-      {
-        HSVColor c = dataColor[i].toHSV();
-        if ((c.H > 20.0f && c.H < 80.0f ) && (c.S > 0.5f) && (c.V > 0.25f))
-        {
-          dataInky[i] = (uint8_t)InkyColor::Yellow;
-        }
-      }
-    }
     // Move the new image buffer into place
-    dest->data_ = std::move(dataInky);
+    dest->data_ = std::move(inkyImage.data_);
   }
   // Conversion type 2: BW/BWR/BWY to RGBA
   else if (format == ImageFormat::RGBA)
@@ -172,7 +146,7 @@ void Image::convert(ImageFormat format, ImageConvertMode mode, Image* dest)
   return;
 }
 
-void Image::scale(int width, int height, ImageScaleMode mode, Image* dest)
+void Image::scale(int width, int height, ImageScaleSettings settings, Image* dest)
 {
   if (dest == nullptr) dest = this;
 
@@ -182,13 +156,13 @@ void Image::scale(int width, int height, ImageScaleMode mode, Image* dest)
   int uncroppedWidth = width;
   int uncroppedHeight = height;
 
-  if (mode == ImageScaleMode::Fill)
+  if (settings.scaleMode == ImageScaleMode::Fill)
   {
     float scale = std::max(xScale, yScale);
     uncroppedWidth = (int)((float)width_ * scale);
     uncroppedHeight = (int)((float)height_ * scale);
   }
-  else if (mode == ImageScaleMode::Fit)
+  else if (settings.scaleMode == ImageScaleMode::Fit)
   {
     float scale = std::min(xScale, yScale);
     uncroppedWidth = (int)((float)width_ * scale);
@@ -227,11 +201,11 @@ void Image::scale(int width, int height, ImageScaleMode mode, Image* dest)
 
   if (width != uncroppedWidth || height != uncroppedHeight)
   {
-    dest->crop((uncroppedWidth - width)/2, (uncroppedHeight - height)/2, width, height);
+    dest->crop((uncroppedWidth - width)/2, (uncroppedHeight - height)/2, width, height, settings);
   }
 }
 
-void Image::crop(int x, int y, int width, int height, Image* dest)
+void Image::crop(int x, int y, int width, int height, ImageScaleSettings settings, Image* dest)
 {
   if (dest == nullptr) dest = this;
   if (x == 0 && y == 0 && width == width_ && height_ == height)
@@ -248,6 +222,8 @@ void Image::crop(int x, int y, int width, int height, Image* dest)
 
   // Create a buffer for the cropped image
   std::vector<uint8_t> croppedData(width*height*bytesPerPixel());
+
+  // TBD: Fill in the background color
 
   // Figure out the copy boundaries
   int srcX = (x < 0) ? 0 : x;
@@ -398,7 +374,7 @@ void Image::writePng(const std::string& filename)
   if (format_ != ImageFormat::RGBA)
   {
     imgToSave = &dest;
-    convert(ImageFormat::RGBA, ImageConvertMode::Threshold, imgToSave);
+    convert(ImageFormat::RGBA, ImageConversionSettings(), imgToSave);
   }
 
   int y;
