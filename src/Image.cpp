@@ -76,17 +76,13 @@ void Image::convert(ImageFormat format, ImageConversionSettings settings, Image*
   {
     Image inkyImage(width_, height_, format);
 
-    if (settings.convertMode == ImageConvertMode::NoDither)
-    {
-      fixedThresh(*this, inkyImage, settings.grayThreshhold);
-    }
-    else if (settings.convertMode == ImageConvertMode::PatternDither)
+    if (settings.ditherMode == DitherMode::Pattern)
     {
       patternDither(*this, inkyImage);
     }
-    else if (settings.convertMode == ImageConvertMode::DiffusionDither)
+    else if (settings.ditherMode == DitherMode::Diffusion)
     {
-      diffusionDither(*this, inkyImage, settings.saturationBias);
+      diffusionDither(*this, inkyImage, settings.ditherAccuracy);
     }
 
     // Move the new image buffer into place

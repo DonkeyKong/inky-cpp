@@ -21,28 +21,20 @@ enum class ImageScaleMode
   Fill
 };
 
-enum class ImageConvertMode
+enum class DitherMode
 {
-  NoDither,     // Use hard thresholding
-  DiffusionDither, // Uses Floyd–Steinberg dithering algo
-  PatternDither // Uses classic 17 pattern swatches
+  Diffusion, // Uses Floyd–Steinberg dithering algo
+  Pattern // Uses classic 17 pattern swatches
 };
 
 struct ImageConversionSettings
 {
   // When converting from RGBA to an Inky image mode, this dithering mode will be used.
-  ImageConvertMode convertMode = ImageConvertMode::DiffusionDither;
+  DitherMode ditherMode = DitherMode::Diffusion;
 
-  // Determines which pixels are white vs black in Inky images
-  // Choose a lower value for more detail in darker areas
-  // Choose a higher value for more detail in lighter areas
-  // Sane values: about (20 - 230)
-  uint8_t grayThreshhold = 128;
-
-  // Determines how "contrast-y" diffusion dither results are
-  // Higher values = more contrast
-  // Sane values: (0 - 80)
-  float saturationBias = 20.0f;
+  // Lower accuracy allows a cleaner result
+  // Sane values: (0.5 - 1.0)
+  float ditherAccuracy = 1.0f;
 };
 
 struct ImageScaleSettings

@@ -13,9 +13,36 @@ int main(int argc, char *argv[])
     img.scale(400, 400, {ImageScaleMode::Fill});
     img.writePng(baseName + "_scaled.png");
     std::cout << "Converting..." << std::endl;
-    Image bw;
-    img.convert(ImageFormat::InkyBW, ImageConversionSettings(), &bw);
-    bw.writePng(baseName + "_bw.png");
+    
+    Image inky;
+
+    img.convert(ImageFormat::InkyBW, ImageConversionSettings{.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.0f}, &inky);
+    inky.writePng(baseName + "_thresh_bw.png");
+    img.convert(ImageFormat::InkyBWR, ImageConversionSettings{.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.0f}, &inky);
+    inky.writePng(baseName + "_thresh_bwr.png");
+    img.convert(ImageFormat::InkyBWY, ImageConversionSettings{.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.0f}, &inky);
+    inky.writePng(baseName + "_thresh_bwy.png");
+
+    img.convert(ImageFormat::InkyBW, ImageConversionSettings{.ditherMode = DitherMode::Pattern}, &inky);
+    inky.writePng(baseName + "_pattern_bw.png");
+    img.convert(ImageFormat::InkyBWR, ImageConversionSettings{.ditherMode = DitherMode::Pattern}, &inky);
+    inky.writePng(baseName + "_pattern_bwr.png");
+    img.convert(ImageFormat::InkyBWY, ImageConversionSettings{.ditherMode = DitherMode::Pattern}, &inky);
+    inky.writePng(baseName + "_pattern_bwy.png");
+
+    img.convert(ImageFormat::InkyBW, ImageConversionSettings{.ditherMode = DitherMode::Diffusion}, &inky);
+    inky.writePng(baseName + "_diffusion_bw.png");
+
+    for (float a = 0; a < 1.0f; a+=0.025)
+    {
+      img.convert(ImageFormat::InkyBWR, ImageConversionSettings{.ditherMode = DitherMode::Diffusion, .ditherAccuracy = a}, &inky);
+      inky.writePng(baseName + "_diffusion_bwr_" + std::to_string(a) + ".png");
+    }
+
+
+    img.convert(ImageFormat::InkyBWY, ImageConversionSettings{.ditherMode = DitherMode::Diffusion}, &inky);
+    inky.writePng(baseName + "_diffusion_bwy.png");
+
     std::cout << "Done!" << std::endl;
   }
   else
