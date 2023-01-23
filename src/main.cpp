@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
   std::cout << "\tWidth: " << display.width() << std::endl;
   std::cout << "\tHeight: " << display.height() << std::endl;
   std::cout << "\tColor Capability: " << display.colorCapability() << std::endl;
-  std::cout << "\tPCB Variant: " << display.pcbVariant() << std::endl;
+  std::cout << "\tPCB Variant: " << (int)display.pcbVariant() << std::endl;
   std::cout << "\tDisplay Variant: " << display.displayVariant() << std::endl;
   std::cout << "\tWrite Time: " << display.writeTime() << std::endl;
 

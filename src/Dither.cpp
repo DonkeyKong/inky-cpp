@@ -1,4 +1,5 @@
 #include "Dither.hpp"
+#include <limits>
 #include <stdexcept>
 #include <map>
 
