@@ -1,6 +1,7 @@
 #include "Color.hpp"
 
 #include <cmath>
+
 #include <algorithm>
 #include <random>
 
@@ -177,5 +178,5 @@ LabColor RGBAColor::toLab() const
 
 float LabColor::deltaE(const LabColor& other) const
 {
-  return std::sqrtf(std::powf(L-other.L, 2) + std::powf(a-other.a, 2) + std::powf(b-other.b, 2));
+  return sqrtf(powf(L-other.L, 2) + powf(a-other.a, 2) + powf(b-other.b, 2));
 }
