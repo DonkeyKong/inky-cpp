@@ -45,5 +45,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
                               ${PNG_INCLUDE_DIR} 
                               deps/QR-Code-generator/cpp 
                               deps/eigen
-                              deps/single-header-image-resampler )
+                              deps/single-header-image-resampler
+                              deps/magic_enum/include )
 target_link_libraries(${PROJECT_NAME} png_static)

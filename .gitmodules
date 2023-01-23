@@ -10,3 +10,6 @@
 [submodule "deps/single-header-image-resampler"]
 	path = deps/single-header-image-resampler
 	url = https://github.com/DonkeyKong/single-header-image-resampler.git
+[submodule "deps/magic_enum"]
+	path = deps/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
