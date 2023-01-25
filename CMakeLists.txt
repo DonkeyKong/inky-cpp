@@ -24,6 +24,7 @@ add_executable( ${PROJECT_NAME}
                     src/Dither.cpp
                     src/Inky.cpp
                     src/I2CDevice.cpp
+                    src/SPIDevice.cpp
                     deps/QR-Code-generator/cpp/qrcodegen.cpp
                     src/main.cpp )
 

@@ -11,7 +11,8 @@ enum class ImageFormat : int
   RGBA = 0,
   InkyBW = 1,
   InkyBWR = 2,
-  InkyBWY = 3
+  InkyBWY = 3,
+  SevenColor = 5
 };
 
 enum class ImageScaleMode

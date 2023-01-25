@@ -2,8 +2,11 @@
 
 #include "Image.hpp"
 #include "I2CDevice.hpp"
+#include "SPIDevice.hpp"
 
-class Inky : public I2CDevice
+#include <vector>
+
+class Inky : public I2CDevice, public SPIDevice
 {
 public:
 
@@ -41,9 +44,11 @@ public:
       Yellow_wHAT_SSD1683 = 19
   };
 
+  enum class InkyCommand : uint8_t;
+
   Inky();
   ~Inky();
-  void setImage(Image image);
+  void setImage(const Image& image);
   void setBorder(InkyColor color);
   void show();
 
@@ -61,5 +66,19 @@ private:
   uint8_t pcbVariant_;
   DisplayVariant displayVariant_;
   std::string writeTime_;
+  InkyColor border_;
+  Image buf_;
+  std::vector<uint8_t> whitePlane_;
+  std::vector<uint8_t> colorPlane_;
+
   void readEeprom();
+  void reset();
+  void waitForBusy(int timeoutMs = 5000);
+  void sendCommand(InkyCommand command);
+  void sendCommand(InkyCommand command, uint8_t param);
+  void sendCommand(InkyCommand command, const std::vector<uint8_t>& params);
+  void generatePackedPlane(std::vector<uint8_t>& packed, InkyColor color);
+  void sendBuffer(const uint8_t* data, int len);
+  void sendBuffer(const std::vector<uint8_t>& data);
+  void sendByte(uint8_t data);
 };
