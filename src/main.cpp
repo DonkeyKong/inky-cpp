@@ -1,22 +1,41 @@
 #include "Inky.hpp"
 #include "HttpService.hpp"
 #include "Image.hpp"
+#include "ImageText.hpp"
 #include <magic_enum.hpp>
 #include <iostream>
 #include <fmt/format.h>
 
+#include <signal.h>
+
 using namespace magic_enum::ostream_operators;
+
+volatile bool interrupt_received = false;
+volatile bool internal_exit = false;
+
+static void InterruptHandler(int signo)
+{
+    interrupt_received = true;
+}
 
 int main(int argc, char *argv[])
 {
+  // Subscribe to signal interrupts
+  signal(SIGTERM, InterruptHandler);
+  signal(SIGINT, InterruptHandler);
+
   Inky display;
   HttpService http;
 
   // Get the URL to show from the HttpService
   std::string configURL = fmt::format("http://{}", http.ListeningInterface());
   auto qrCode = Image::FromQrPayload(configURL);
-  qrCode->scale(display.width(), display.height(), {.scaleMode = ImageScaleMode::Fit});
-  display.setImage(*qrCode);
+  qrCode.scale(display.width(), display.height()-50, {.scaleMode = ImageScaleMode::Fit, .interpolationMode = ImageInterpolationMode::Nearest});
+  qrCode.crop(0, 0, display.width(), display.height());
+  Text::Draw(configURL, qrCode, 200, 250, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+  Text::Draw("Scan the QR code to upload a new photo.", qrCode, 200, 270, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+  display.setImage(qrCode);
+  display.show();
   
   // svr.Post("/content_receiver",
   // [&](const Request &req, Response &res, const ContentReader &content_reader) {
@@ -40,30 +59,21 @@ int main(int argc, char *argv[])
   //     });
   //   }
   // });
-  
 
-  // std::cout << "Connected to Inky Display!" << std::endl;
-  // std::cout << "\tWidth: " << display.width() << std::endl;
-  // std::cout << "\tHeight: " << display.height() << std::endl;
-  // std::cout << "\tColor Capability: " << display.colorCapability() << std::endl;
-  // std::cout << "\tPCB Variant: " << (int)display.pcbVariant() << std::endl;
-  // std::cout << "\tDisplay Variant: " << display.displayVariant() << std::endl;
-  // std::cout << "\tWrite Time: " << display.writeTime() << std::endl;
+  // Start the main waiting loop
+  while (!interrupt_received && !internal_exit)
+  {
+      // Regulate update rate
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
 
-  // if (argc == 2)
-  // {
-  //   Image img;
-  //   std::string baseName = argv[1];
-  //   std::cout << "Reading input png..." << std::endl;
-  //   img.readPng(baseName);
-  //   std::cout << "Setting and converting image..." << std::endl;
-  //   display.setImage(img);
-  //   std::cout << "Updating display..." << std::endl;
-  //   display.show();
-  //   std::cout << "Done!" << std::endl;
-  // }
-  // else
-  // {
-  //   std::cout << "Please provide 1 argument, the input file name to show on the display." << std::endl;
-  // }
+  if (interrupt_received)
+  {
+      fprintf(stderr, "Main thread caught exit signal.\n");
+  }
+
+  if (internal_exit)
+  {
+      fprintf(stderr, "Main thread got internal exit request.\n");
+  }
 }

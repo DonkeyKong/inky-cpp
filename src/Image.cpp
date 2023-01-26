@@ -165,6 +165,13 @@ void Image::scale(int width, int height, ImageScaleSettings settings, Image* des
     uncroppedHeight = (int)((float)height_ * scale);
   }
 
+  if (settings.interpolationMode == ImageInterpolationMode::Auto)
+  {
+    // Use Bilinear for enlargement and Gaussian for reduction
+    settings.interpolationMode = (width > width_) ? ImageInterpolationMode::Bilinear : 
+                                                    ImageInterpolationMode::Gaussian;
+  }
+
   if (width == width_ && height == height_)
   {
     // Image is the correct size already!
@@ -179,7 +186,7 @@ void Image::scale(int width, int height, ImageScaleSettings settings, Image* des
     std::vector<uint8_t> scaleData(uncroppedWidth * uncroppedHeight * 4);
     base::ResampleImage<4>(data_.data(), (uint32_t)width_, (uint32_t)height_,
                            scaleData.data(), (uint32_t)uncroppedWidth, (uint32_t)uncroppedHeight,
-                           base::KernelTypeGaussian);
+                           (base::KernelType)settings.interpolationMode);
     dest->data_ = std::move(scaleData);
   }
   else 
@@ -187,7 +194,7 @@ void Image::scale(int width, int height, ImageScaleSettings settings, Image* des
     std::vector<uint8_t> scaleData(uncroppedWidth * uncroppedHeight);
     base::ResampleImage<1>(data_.data(), (uint32_t)width_, (uint32_t)height_,
                            scaleData.data(), (uint32_t)uncroppedWidth, (uint32_t)uncroppedHeight,
-                           base::KernelTypeLanczos3);
+                           (base::KernelType)settings.interpolationMode);
     dest->data_ = std::move(scaleData);
   }
   
@@ -218,8 +225,26 @@ void Image::crop(int x, int y, int width, int height, ImageScaleSettings setting
 
   // Create a buffer for the cropped image
   std::vector<uint8_t> croppedData(width*height*bytesPerPixel());
+  int size = width * height;
 
-  // TBD: Fill in the background color
+  // Fill in the background color
+  if (format_ == ImageFormat::RGBA)
+  {
+    RGBAColor* data = (RGBAColor*)croppedData.data();
+    for (int i=0; i < size; ++i)
+    {
+      data[i] = settings.backgroundColor;
+    }
+  }
+  else
+  {
+    InkyColor backgroundColor = nearestInkyColor(settings.backgroundColor, format_);
+    InkyColor* data = (InkyColor*)croppedData.data();
+    for (int i=0; i < size; ++i)
+    {
+      data[i] = backgroundColor;
+    }
+  }
 
   // Figure out the copy boundaries
   int srcX = (x < 0) ? 0 : x;
@@ -244,24 +269,24 @@ void Image::crop(int x, int y, int width, int height, ImageScaleSettings setting
   dest->data_ = std::move(croppedData);
 }
 
-
-std::shared_ptr<Image> Image::FromPngFile(const std::string& imagePath)
+Image Image::FromPngFile(const std::string& imagePath, ImageFormat format, ImageConversionSettings settings)
 {
-    auto image = std::make_shared<Image>();
-    image->readPng(imagePath);
+    Image image;
+    image.readPng(imagePath);
+    image.convert(format, settings);
     return image;
 }
 
-std::shared_ptr<Image> Image::FromQrPayload(const std::string& qrPayload)
+Image Image::FromQrPayload(const std::string& qrPayload)
 {
-    auto image = std::make_shared<Image>();
+    Image image;
     
     auto qr = qrcodegen::QrCode::encodeText(qrPayload.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
     const int quietZoneSize = 2;
-    image->width_ = qr.getSize() + quietZoneSize * 2;
-    image->height_ = qr.getSize() + quietZoneSize * 2;
-    image->data_.resize(image->width_ * image->height_ * 4);
-    auto dataPtr = image->data();
+    image.width_ = qr.getSize() + quietZoneSize * 2;
+    image.height_ = qr.getSize() + quietZoneSize * 2;
+    image.data_.resize(image.width_ * image.height_ * 4);
+    auto dataPtr = image.data();
 
     for (int y = -quietZoneSize; y < qr.getSize() + quietZoneSize; y++)
     {
@@ -438,6 +463,11 @@ int Image::width() const
 int Image::height() const
 {
     return height_;
+}
+
+BoundingBox Image::bounds() const
+{
+  return {0, 0, width_, height_};
 }
 
 ImageFormat Image::format() const

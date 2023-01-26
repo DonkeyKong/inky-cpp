@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 #include <algorithm>
-#ifdef PI_HOST
+#ifndef SIMULATE_PI_HARDWARE
 #include <stdint.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -17,7 +17,7 @@ SPIDevice::SPIDevice(std::string spiDeviceName, uint32_t maxBusSpeedHz, uint32_t
   maxBusSpeedHz_(maxBusSpeedHz),
   maxTransferSizeBytes_(maxTransferSizeBytes)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
 	spiFile_ = open(spiDeviceName.c_str(), O_RDWR);
 	if (spiFile_ < 0)
 	{
@@ -65,7 +65,7 @@ SPIDevice::SPIDevice(std::string spiDeviceName, uint32_t maxBusSpeedHz, uint32_t
 
 SPIDevice::~SPIDevice()
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   if (spiFile_ != -1)
   {
     close(spiFile_);  
@@ -86,7 +86,7 @@ int SPIDevice::readSPI(std::vector<uint8_t> &buf, uint16_t delayUs)
 int SPIDevice::writeSPI(const uint8_t* buf, size_t len, uint16_t delayUs)
 {
   int ret = 0;
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
 
   uint32_t blocks = len / maxTransferSizeBytes_ + ((len % maxTransferSizeBytes_ != 0) ? 1 : 0);
   std::vector<spi_ioc_transfer> transfers(blocks);
@@ -114,7 +114,7 @@ int SPIDevice::writeSPI(const uint8_t* buf, size_t len, uint16_t delayUs)
 int SPIDevice::readSPI(uint8_t* buf, size_t len, uint16_t delayUs)
 {
   int ret = 0;
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   uint32_t blocks = len / maxTransferSizeBytes_ + ((len % maxTransferSizeBytes_ != 0) ? 1 : 0);
   std::vector<spi_ioc_transfer> transfers(blocks);
 

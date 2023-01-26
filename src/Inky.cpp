@@ -1,7 +1,9 @@
 #include "Inky.hpp"
-#ifdef PI_HOST
+#ifndef SIMULATE_PI_HARDWARE
 #include "minimal_gpio.h"
 #endif
+#include <fmt/format.h>
+#include <chrono>
 #include <algorithm>
 #include <stdexcept>
 
@@ -104,7 +106,7 @@ Inky::Inky() : I2CDevice(InkyEEPROMI2CDeviceId),
     throw std::runtime_error("Unsupported Inky display type!!");
   }
 
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   // Setup the GPIO pins
   if (gpioInitialise() < 0)
   {
@@ -128,7 +130,7 @@ Inky::~Inky()
 
 void Inky::reset()
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   // Perform a hardware reset
   gpioWrite(InkyResetGPIO, 0);
   delay(500);
@@ -142,7 +144,7 @@ void Inky::reset()
 
 void Inky::sendCommand(InkyCommand command)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 0);
   #endif
   #ifdef DEBUG_SPI
@@ -156,7 +158,7 @@ void Inky::sendCommand(InkyCommand command)
 
 void Inky::sendCommand(InkyCommand command, uint8_t param)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 0);
   #endif
   #ifdef DEBUG_SPI
@@ -171,7 +173,7 @@ void Inky::sendCommand(InkyCommand command, uint8_t param)
 
 void Inky::sendCommand(InkyCommand command, const std::vector<uint8_t>& params)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 0);
   #endif
   #ifdef DEBUG_SPI
@@ -186,7 +188,7 @@ void Inky::sendCommand(InkyCommand command, const std::vector<uint8_t>& params)
 
 void Inky::sendBuffer(const uint8_t* buffer, int len)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 1);
   #endif
   #ifdef DEBUG_SPI
@@ -200,7 +202,7 @@ void Inky::sendBuffer(const uint8_t* buffer, int len)
 
 void Inky::sendBuffer(const std::vector<uint8_t>& buffer)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 1);
   #endif
   #ifdef DEBUG_SPI
@@ -214,7 +216,7 @@ void Inky::sendBuffer(const std::vector<uint8_t>& buffer)
 
 void Inky::sendByte(uint8_t data)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   gpioWrite(InkyDcGPIO, 1);
   #endif
   #ifdef DEBUG_SPI
@@ -228,7 +230,7 @@ void Inky::sendByte(uint8_t data)
 
 void Inky::waitForBusy(int timeoutMs)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   int i = 0;
   while (gpioRead(InkyBusyGPIO) != 0)
   {
@@ -250,7 +252,7 @@ void Inky::readEeprom()
   readI2C(0, rom, 29);
 
   // Some fake data on non-pi platforms
-  #ifndef PI_HOST
+  #ifdef SIMULATE_PI_HARDWARE
   write16(400, rom);
   write16(300, rom+2);
   rom[4] = (uint8_t)ColorCapability::BlackWhiteRed;
@@ -352,6 +354,12 @@ void Inky::generatePackedPlane(std::vector<uint8_t>& packed, InkyColor color)
   }
 }
 
+static inline int64_t millisecondsSinceEpoch()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
 
 void Inky::show()
 {
@@ -415,4 +423,8 @@ void Inky::show()
   
   waitForBusy();
   sendCommand(InkyCommand::MASTER_ACTIVATE);
+
+  #ifdef SIMULATE_PI_HARDWARE
+  buf_.writePng(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+  #endif
 }

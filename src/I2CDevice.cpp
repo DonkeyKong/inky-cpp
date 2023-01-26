@@ -3,7 +3,7 @@
 #include <thread>
 #include <stdexcept>
 
-#ifdef PI_HOST
+#ifndef SIMULATE_PI_HARDWARE
 #include <unistd.h>        //Needed for I2C port
 #include <fcntl.h>         //Needed for I2C port
 #include <sys/ioctl.h>     //Needed for I2C port
@@ -12,7 +12,7 @@
 
 I2CDevice::I2CDevice(uint8_t deviceId, std::string i2cDeviceName)
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   if ((i2cFile_ = open(i2cDeviceName.c_str(), O_RDWR)) < 0)
   {
     i2cFile_ = -1;
@@ -29,7 +29,7 @@ I2CDevice::I2CDevice(uint8_t deviceId, std::string i2cDeviceName)
 
 I2CDevice::~I2CDevice()
 {
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   if (i2cFile_ != -1)
   {
     close(i2cFile_);
@@ -56,7 +56,7 @@ bool I2CDevice::writeI2C(uint16_t addr, const uint8_t* buf, size_t len)
   {
     bufWithAddr[i + 2] = buf[i];
   }
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   if (write(i2cFile_, bufWithAddr.data(), bufWithAddr.size()) != bufWithAddr.size()) // write() returns the number of bytes actually written, if it doesn't match then an error occurred (e.g. no response from the device)
   {
     return false;
@@ -69,7 +69,7 @@ bool I2CDevice::readI2C(uint16_t addr, uint8_t* buf, size_t len, double delayMs)
 {
   writeI2C(addr);
   delay(delayMs);
-  #ifdef PI_HOST
+  #ifndef SIMULATE_PI_HARDWARE
   if (read(i2cFile_, buf, len) != len) // read() returns the number of bytes actually read, if it doesn't match then an error occurred (e.g. no response from the device)
   {
     return false;

@@ -142,7 +142,20 @@ void patternDither(const Image& sourceImage, Image& destImage)
   }
 }
 
-static InkyColor nearestInkyColor(const LabColor& color, LabColor& error, ImageFormat format)
+InkyColor nearestInkyColor(const RGBAColor& color, ImageFormat format)
+{
+  LabColor lab = color.toLab();
+  LabColor error;
+  return nearestInkyColor(lab, error, format);
+}
+
+InkyColor nearestInkyColor(const LabColor& color, ImageFormat format)
+{
+  LabColor error;
+  return nearestInkyColor(color, error, format);
+}
+
+InkyColor nearestInkyColor(const LabColor& color, LabColor& error, ImageFormat format)
 {
   static LabColor red {54, 81, 70};
   static LabColor yellow {98, -16, 93};

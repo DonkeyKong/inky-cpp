@@ -8,8 +8,10 @@ find_file(BCM_HOST_PATH NAMES "bcm_host.h")
 message("BCM host header: ${BCM_HOST_PATH}")
 
 add_executable( ${PROJECT_NAME} 
+                    src/BoundingBox.cpp
                     src/Color.cpp
                     src/Image.cpp
+                    src/ImageText.cpp
                     src/Dither.cpp
                     src/Inky.cpp
                     src/I2CDevice.cpp
@@ -62,11 +64,10 @@ target_include_directories(libjpeg INTERFACE ${LIBJPEG_TURBO_INSTALL_PATH}/inclu
 target_link_libraries(libjpeg INTERFACE ${LIBJPEG_TURBO_INSTALL_PATH}/lib/libturbojpeg.a)
 
 # Set some compiler flags used for features
-if (BCM_HOST_PATH)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC "PI_HOST")       
+if (BCM_HOST_PATH)     
     target_link_libraries(${PROJECT_NAME} bcm_host)
 else()
-
+  target_compile_definitions(${PROJECT_NAME} PUBLIC "SIMULATE_PI_HARDWARE")  
 endif()
 
 # Link the c++ filesystem API under GCC

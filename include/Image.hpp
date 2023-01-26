@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Color.hpp"
+#include "BoundingBox.hpp"
+#include "base_resample.h"
 
 #include <vector>
 #include <string>
@@ -20,6 +22,25 @@ enum class ImageScaleMode
   Stretch,
   Fit,
   Fill
+};
+
+enum class ImageInterpolationMode
+{
+  Auto = -1,
+  Nearest  = (int) base::KernelTypeNearest,
+  Average  = (int) base::KernelTypeAverage,
+  Bilinear = (int) base::KernelTypeBilinear,
+  Bicubic  = (int) base::KernelTypeBicubic,
+  Mitchell = (int) base::KernelTypeMitchell,
+  Cardinal = (int) base::KernelTypeCardinal,
+  BSpline  = (int) base::KernelTypeBSpline,
+  Lanczos  = (int) base::KernelTypeLanczos,
+  Lanczos2 = (int) base::KernelTypeLanczos2,
+  Lanczos3 = (int) base::KernelTypeLanczos3,
+  Lanczos4 = (int) base::KernelTypeLanczos4,
+  Lanczos5 = (int) base::KernelTypeLanczos5,
+  Catmull  = (int) base::KernelTypeCatmull,
+  Gaussian = (int) base::KernelTypeGaussian,
 };
 
 enum class DitherMode
@@ -46,8 +67,10 @@ struct ImageScaleSettings
   // "Fit" maintains the source image aspect ratio and scales it to fit inside the destination image
   ImageScaleMode scaleMode = ImageScaleMode::Stretch;
 
+  ImageInterpolationMode interpolationMode = ImageInterpolationMode::Auto;
+
   // When scaling or cropping, this determines what color fills in the background if not all destination pixels are covered
-  RGBAColor backgroundColor;
+  RGBAColor backgroundColor {255, 255, 255, 255};
 };
 
 class Image
@@ -74,6 +97,9 @@ public:
     // Get the image format
     ImageFormat format() const;
 
+    // Get the bounding box of this image's pixel grid
+    BoundingBox bounds() const;
+
     // Get the number of bytes per pixel
     int bytesPerPixel() const;
 
@@ -97,10 +123,10 @@ public:
     void writePng(const std::string& imagePath);
 
     // Open a PNG file from disk and construct an image around it
-    static std::shared_ptr<Image> FromPngFile(const std::string& imagePath);
+    static Image FromPngFile(const std::string& imagePath, ImageFormat format = ImageFormat::RGBA, ImageConversionSettings settings = {});
 
     // Create a new image containing a QR code
-    static std::shared_ptr<Image> FromQrPayload(const std::string& qrPayload);
+    static Image FromQrPayload(const std::string& qrPayload);
 
     // Access pixel data directly from the image
     uint8_t& operator[](std::size_t idx);
