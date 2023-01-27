@@ -99,11 +99,9 @@ static void checkDitherSrcDest(const Image& sourceImage, Image& destImage)
     throw std::invalid_argument("Source image format must be RGBA");
   }
 
-  if (destImage.format() != ImageFormat::InkyBW && 
-      destImage.format() != ImageFormat::InkyBWR && 
-      destImage.format() != ImageFormat::InkyBWY)
+  if (destImage.format() != ImageFormat::IndexedColor)
   {
-    throw std::invalid_argument("Dest image format must be an Inky format!");
+    throw std::invalid_argument("Dest image format must be an Indexed format!");
   }
 
   if (destImage.height() != sourceImage.height() || 
@@ -122,6 +120,9 @@ void patternDither(const Image& sourceImage, Image& destImage)
   const RGBAColor* dataRGBA = (const RGBAColor*)sourceImage.data();
   uint8_t* dataInky = destImage.data();
 
+  IndexedColor black = destImage.colorMap().toIndexedColor(ColorName::Black);
+  IndexedColor white = destImage.colorMap().toIndexedColor(ColorName::White);
+
   // Iterate over all the color data, just converting to black and white
   for (int y=0; y < height; ++y)
   {
@@ -130,62 +131,15 @@ void patternDither(const Image& sourceImage, Image& destImage)
       int lutOffset = ((int)dataRGBA->getGrayValue() + 0x08) & 0x1F0;
       if (ditherLut[lutOffset + (y%4)*4+(x%4)])
       {
-        (*dataInky) = (uint8_t)InkyColor::White;
+        (*dataInky) = white;
       }
       else
       {
-        (*dataInky) = (uint8_t)InkyColor::Black;
+        (*dataInky) = black;
       }
       ++dataInky;
       ++dataRGBA;
     }
-  }
-}
-
-InkyColor nearestInkyColor(const RGBAColor& color, ImageFormat format)
-{
-  LabColor lab = color.toLab();
-  LabColor error;
-  return nearestInkyColor(lab, error, format);
-}
-
-InkyColor nearestInkyColor(const LabColor& color, ImageFormat format)
-{
-  LabColor error;
-  return nearestInkyColor(color, error, format);
-}
-
-InkyColor nearestInkyColor(const LabColor& color, LabColor& error, ImageFormat format)
-{
-  static LabColor red {54, 81, 70};
-  static LabColor yellow {98, -16, 93};
-  static LabColor white {100, 0, 0};
-  static LabColor black {0, 0, 0};
-
-  float dEW = white.deltaE(color);
-  float dEB = black.deltaE(color);
-  float dER = format == ImageFormat::InkyBWR ? red.deltaE(color) : std::numeric_limits<float>::infinity();
-  float dEY = format == ImageFormat::InkyBWY ? yellow.deltaE(color) : std::numeric_limits<float>::infinity();
-
-  if (format == ImageFormat::InkyBWR && dER <= dEW && dER <= dEB)
-  {
-    error = color - red;
-    return InkyColor::Red;
-  }
-  else if (format == ImageFormat::InkyBWY && dEY <= dEW && dEY <= dEB)
-  {
-    error = color - yellow;
-    return InkyColor::Yellow;
-  }
-  else if (dEW <= dEB)
-  {
-    error = color - white;
-    return InkyColor::White;
-  }
-  else
-  {
-    error = color - black;
-    return InkyColor::Black;
   }
 }
 
@@ -196,11 +150,9 @@ static std::vector<LabColor> getLabVector(const Image& sourceImage, ImageFormat 
     throw std::invalid_argument("Source image format must be RGBA");
   }
 
-  if (destFormat != ImageFormat::InkyBW && 
-      destFormat != ImageFormat::InkyBWR && 
-      destFormat != ImageFormat::InkyBWY)
+  if (destFormat != ImageFormat::IndexedColor)
   {
-    throw std::invalid_argument("Dest image format must be an Inky format!");
+    throw std::invalid_argument("Dest image format must be an indexed format!");
   }
 
   // Copy the source image to a float array for convenience
@@ -208,23 +160,10 @@ static std::vector<LabColor> getLabVector(const Image& sourceImage, ImageFormat 
   std::vector<LabColor> labVals(sourceImage.width()*sourceImage.height());
   
   const RGBAColor* dataRGBA = (const RGBAColor*)sourceImage.data();
-  if (destFormat == ImageFormat::InkyBW)
+  // Yellow and red accents work best right on the color image
+  for (int i=0; i < labVals.size(); ++i)
   {
-    // For black and white output, we will get a higher quality result
-    // if we first convert to grayscale, then dither the gray image.
-    for (int i=0; i < labVals.size(); ++i)
-    {
-      uint8_t g = dataRGBA[i].getGrayValue();
-      labVals[i] = RGBAColor{g,g,g,255}.toLab();
-    }
-  }
-  else
-  {
-    // Yellow and red accents work best right on the color image
-    for (int i=0; i < labVals.size(); ++i)
-    {
-      labVals[i] = dataRGBA[i].toLab();
-    }
+    labVals[i] = dataRGBA[i].toLab();
   }
   
   return labVals;
@@ -372,13 +311,14 @@ void diffusionDither(const Image& sourceImage, Image& destImage, float ditherAcc
 
   // Convert to Inky using Floyd-Steinberg dithering
   uint8_t* dataInky = destImage.data();
+  const IndexedColorMap& colorMap = destImage.colorMap();
+  LabColor error, oldValue;
   for (int y=0; y < height; ++y)
   {
     for (int x=0; x < width; ++x)
     {
-      LabColor oldValue = labVals[x+y*width];
-      LabColor error;
-      (*dataInky) = (uint8_t)nearestInkyColor(oldValue, error, format);
+      oldValue = labVals[x+y*width];
+      (*dataInky) = colorMap.toIndexedColor(oldValue, error);
       error = error * ditherAccuracy;
 
       diffuseError(labVals, oldValue, error, x, y, width, height);

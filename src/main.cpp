@@ -1,7 +1,7 @@
 #include "Inky.hpp"
 #include "HttpService.hpp"
 #include "Image.hpp"
-#include "ImageText.hpp"
+#include "Text.hpp"
 #include <magic_enum.hpp>
 #include <iostream>
 #include <fmt/format.h>

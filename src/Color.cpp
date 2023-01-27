@@ -4,6 +4,96 @@
 
 #include <algorithm>
 #include <random>
+#include <stdexcept>
+
+IndexedColorMap::IndexedColorMap(std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> mapping)
+{
+  if (mapping.size() > 254)
+  {
+    throw std::invalid_argument("Cannot create IndexedColorMap with more than 254 mappings!");
+  }
+
+  // Create exhaustive mappings
+  for (const auto& [name, index, rgba] : mapping)
+  {
+    indexedColors_.push_back(index);
+    namedColors_.push_back(name);
+    indexToName[index] = name;
+    indexToRgba[index] = rgba;
+    indexToLab[index] = rgba.toLab();
+    nameToIndex[name] = index;
+    nameToRgba[name] = rgba;
+    nameToLab[name] = rgba.toLab();
+  }
+}
+
+const std::vector<IndexedColor>& IndexedColorMap::indexedColors() const 
+{
+  return indexedColors_;
+}
+
+const std::vector<ColorName>& IndexedColorMap::namedColors() const 
+{
+  return namedColors_;
+}
+
+IndexedColor IndexedColorMap::toIndexedColor(const LabColor& color, LabColor& error) const
+{
+  // Find the indexed color with the minimum deltaE from the specified color
+  float minDeltaE = std::numeric_limits<float>::infinity();
+  IndexedColor minIndexColor = 0;
+  LabColor minLabColor;
+  for (const auto& [indexedColor, refColor] : indexToLab)
+  {
+    float dE = refColor.deltaE(color);
+    if (dE < minDeltaE)
+    {
+      minDeltaE = dE;
+      minIndexColor = indexedColor;
+      minLabColor = refColor;
+    }
+  }
+  error = color - minLabColor;
+  return minIndexColor;
+}
+
+IndexedColor IndexedColorMap::toIndexedColor(const RGBAColor& color) const
+{
+  LabColor error;
+  return toIndexedColor(color.toLab(), error);
+}
+
+IndexedColor IndexedColorMap::toIndexedColor(const LabColor& color) const
+{
+  LabColor error;
+  return toIndexedColor(color, error);
+}
+
+RGBAColor IndexedColorMap::toRGBAColor(const IndexedColor indexedColor) const
+{
+  if (indexToRgba.count(indexedColor) > 0)
+    return indexToRgba.at(indexedColor);
+  return RGBAColor();
+}
+
+LabColor IndexedColorMap::toLabColor(const IndexedColor indexedColor) const
+{
+  if (indexToLab.count(indexedColor) > 0)
+    return indexToLab.at(indexedColor);
+  return LabColor();
+}
+
+IndexedColor IndexedColorMap::toIndexedColor(const ColorName namedColor) const
+{
+  if (nameToIndex.count(namedColor) > 0)
+    return nameToIndex.at(namedColor);
+  return 255;
+}
+
+uint8_t IndexedColorMap::size() const
+{
+  return (uint8_t) indexedColors_.size();
+}
 
 RGBAColor HSVColor::toRGB()
 {

@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <cmath>
+#include <map>
 
 // Hack to fix intellisense with some arm NEON code
 #if __INTELLISENSE__
@@ -35,11 +36,20 @@ Image::Image()
     format_ = ImageFormat::RGBA;
 }
 
-Image::Image(int width, int height, ImageFormat format )
+Image::Image(int width, int height)
 {
     width_ = width;
     height_ = height;
-    format_ = format;
+    format_ = ImageFormat::RGBA;
+    data_.resize(width_ * height_ * bytesPerPixel());
+}
+
+Image::Image(int width, int height, IndexedColorMap colorMap)
+{
+    width_ = width;
+    height_ = height;
+    format_ = ImageFormat::IndexedColor;
+    colorMap_ = colorMap;
     data_.resize(width_ * height_ * bytesPerPixel());
 }
 
@@ -48,97 +58,72 @@ int Image::bytesPerPixel() const
   return format_ == ImageFormat::RGBA ? 4 : 1;
 }
 
-void Image::convert(ImageFormat format, ImageConversionSettings settings, Image* dest)
+void Image::toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings, Image* dest)
 {
   if (dest == nullptr) dest = this;
 
-  // Possible conversion types
-  //                         from
-  //               RGBA |  BW  |  BWR |  BWY
-  //             +------+------+------+------+
-  //        RGBA |  -   |  2   |   2  |   2  |
-  //  to      BW |  1   |  -   |   3  |   3  |
-  //         BWR |  1   |  -   |   -  |   -  |
-  //         BWY |  1   |  -   |   -  |   -  |
-
-  // This catches all the no-op ("-") conversions
-  if (format == format_ || ((int)format > 1 && (int)format_ > 0))
+  // Conversion type 1: RGBA to indexed
+  if (format_ == ImageFormat::RGBA)
   {
-    // Image is the correct format already!
-    // Just copy the data as-is
-    if (dest != this)
-    {
-      dest->data_ = data_;
-    }
-  }
-  // Conversion type 1: RGBA to BW/BWR/BWY
-  else if (format_ == ImageFormat::RGBA)
-  {
-    Image inkyImage(width_, height_, format);
+    Image indexImage(width_, height_, colorMap);
 
     if (settings.ditherMode == DitherMode::Pattern)
     {
-      patternDither(*this, inkyImage);
+      patternDither(*this, indexImage);
     }
     else if (settings.ditherMode == DitherMode::Diffusion)
     {
-      diffusionDither(*this, inkyImage, settings.ditherAccuracy);
+      diffusionDither(*this, indexImage, settings.ditherAccuracy);
     }
 
     // Move the new image buffer into place
-    dest->data_ = std::move(inkyImage.data_);
+    dest->data_ = std::move(indexImage.data_);
+    dest->width_ = width_;
+    dest->height_ = height_;
+    dest->format_ = ImageFormat::IndexedColor;
+    dest->colorMap_ = colorMap;
+    return;
   }
-  // Conversion type 2: BW/BWR/BWY to RGBA
-  else if (format == ImageFormat::RGBA)
+  // Conversion type 2: indexed to indexed (via RGBA)
+  else
   {
-    RGBAColor rgbaLut[] = { {255, 255, 255, 255},   // White
-                            {  0,   0,   0, 255},   // Black
-                            {  0,   0,   0, 255} }; // Color
-    if (format_ == ImageFormat::InkyBWR)
-    {
-      rgbaLut[2] = {255, 0, 0, 255};
-    }
-    else if (format_ == ImageFormat::InkyBWY)
-    {
-      rgbaLut[2] = {255, 255, 0, 255};
-    }
-
-    std::vector<uint8_t> dataRGBA(4 * width_ * height_);
-    for (int i=0; i < data_.size(); ++i)
-    {
-      uint8_t c = data_[i];
-      if (c < 3)
-      {
-          dataRGBA[i*4+0] = rgbaLut[c].R;
-          dataRGBA[i*4+1] = rgbaLut[c].G;
-          dataRGBA[i*4+2] = rgbaLut[c].B;
-          dataRGBA[i*4+3] = rgbaLut[c].A;
-      }
-    }
-    dest->data_ = std::move(dataRGBA);
+    Image rgbaImage(width_, height_);
+    toRGBA(&rgbaImage);
+    rgbaImage.toIndexed(colorMap, settings, dest);
+    return;
   }
-  // Conversion type 3: BWR/BWY to BW
-  else if (format == ImageFormat::InkyBW)
+}
+
+void Image::toRGBA(Image* dest)
+{
+  if (dest == nullptr) dest = this;
+
+  // Image is the correct format already!
+  // Just copy the data as-is
+  if (format_ == ImageFormat::RGBA)
   {
     if (dest != this)
     {
       dest->data_ = data_;
     }
-    std::vector<uint8_t>& dataBW = dest->data_;
-    InkyColor colorToBwSub = (format_ == ImageFormat::InkyBWR) ? InkyColor::Black : InkyColor::White;
-    for (int i=0; i < dataBW.size(); ++i)
+  }
+  // Conversion type 2: BW/BWR/BWY to RGBA
+  else
+  {
+    std::vector<uint8_t> dataRGBA(4 * width_ * height_);
+    RGBAColor* rgbaPtr = (RGBAColor*)dataRGBA.data();
+    IndexedColor* indexedPtr = (IndexedColor*) data_.data();
+    for (int i=0; i < data_.size(); ++i)
     {
-      // Look for color accents and plaint them black (red) or white (yellow)
-      if (dataBW[i] > (uint8_t)InkyColor::Black)
-      {
-        dataBW[i] = (uint8_t)colorToBwSub;
-      }
+      rgbaPtr[i] = colorMap_.toRGBAColor(indexedPtr[i]);
     }
+    dest->data_ = std::move(dataRGBA);
   }
   
+  // Set the size and format on the destination image
   dest->width_ = width_;
   dest->height_ = height_;
-  dest->format_ = format;
+  dest->format_ = ImageFormat::RGBA;
   return;
 }
 
@@ -238,8 +223,8 @@ void Image::crop(int x, int y, int width, int height, ImageScaleSettings setting
   }
   else
   {
-    InkyColor backgroundColor = nearestInkyColor(settings.backgroundColor, format_);
-    InkyColor* data = (InkyColor*)croppedData.data();
+    IndexedColor backgroundColor = colorMap_.toIndexedColor(settings.backgroundColor);
+    IndexedColor* data = (IndexedColor*)croppedData.data();
     for (int i=0; i < size; ++i)
     {
       data[i] = backgroundColor;
@@ -269,25 +254,24 @@ void Image::crop(int x, int y, int width, int height, ImageScaleSettings setting
   dest->data_ = std::move(croppedData);
 }
 
-Image Image::FromPngFile(const std::string& imagePath, ImageFormat format, ImageConversionSettings settings)
+const IndexedColorMap& Image::colorMap() const
 {
-    Image image;
+  return colorMap_;
+}
+
+Image Image::FromPngFile(const std::string& imagePath)
+{
+    Image image(0,0);
     image.readPng(imagePath);
-    image.convert(format, settings);
     return image;
 }
 
 Image Image::FromQrPayload(const std::string& qrPayload)
 {
-    Image image;
-    
     auto qr = qrcodegen::QrCode::encodeText(qrPayload.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
     const int quietZoneSize = 2;
-    image.width_ = qr.getSize() + quietZoneSize * 2;
-    image.height_ = qr.getSize() + quietZoneSize * 2;
-    image.data_.resize(image.width_ * image.height_ * 4);
+    Image image (qr.getSize() + quietZoneSize * 2, qr.getSize() + quietZoneSize * 2);
     auto dataPtr = image.data();
-
     for (int y = -quietZoneSize; y < qr.getSize() + quietZoneSize; y++)
     {
         for (int x = -quietZoneSize; x < qr.getSize() + quietZoneSize; x++)
@@ -395,7 +379,7 @@ void Image::writePng(const std::string& filename)
   if (format_ != ImageFormat::RGBA)
   {
     imgToSave = &dest;
-    convert(ImageFormat::RGBA, ImageConversionSettings(), imgToSave);
+    toRGBA(imgToSave);
   }
 
   int y;

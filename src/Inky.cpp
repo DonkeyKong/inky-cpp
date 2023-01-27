@@ -95,9 +95,56 @@ Inky::Inky() : I2CDevice(InkyEEPROMI2CDeviceId),
                SPIDevice(InkySPIDevice, InkySPIDeviceSpeedHz)
 {
   readEeprom();
-  border_ = InkyColor::White;
 
-  buf_ = Image(width_, height_, (ImageFormat)colorCapability_);
+  std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> displayColors;
+  switch (colorCapability_)
+  {
+    case ColorCapability::BlackWhite:
+      displayColors = 
+      {
+        {ColorName::White, 0, {255,255,255}},
+        {ColorName::Black, 1, {0,0,0}}
+      };
+      break;
+    case ColorCapability::BlackWhiteRed:
+      displayColors = 
+      {
+        {ColorName::White, 0, {255,255,255}},
+        {ColorName::Black, 1, {0,0,0}},
+        {ColorName::Red, 2, {255,0,0}}
+      };
+      break;
+    case ColorCapability::BlackWhiteYellow:
+      displayColors = 
+      {
+        {ColorName::White, 0, {255,255,255}},
+        {ColorName::Black, 1, {0,0,0}},
+        {ColorName::Red, 2, {255,0,0}}
+      };
+      break;
+    case ColorCapability::SevenColor:
+      displayColors = 
+        {
+          {ColorName::Black, 0, {0,0,0}},
+          {ColorName::White, 1, {255,255,255}},
+          {ColorName::Green, 2, {0,255,0}},
+          {ColorName::Blue, 3, {0,0,255}},
+          {ColorName::Red, 4, {255,0,0}},
+          {ColorName::Yellow, 5, {255,255,0}},
+          {ColorName::Orange, 6, {255,127,0}}
+        };
+      break;
+  }
+  colorMap_ = IndexedColorMap(displayColors);
+
+  for (int i=0; i < colorMap_.size(); ++i)
+  {
+    planes_.push_back({});
+  }
+  
+  border_ = colorMap_.toIndexedColor(ColorName::White);
+
+  buf_ = Image(width_, height_, colorMap_);
 
   if (displayVariant_ != DisplayVariant::Black_wHAT_SSD1683 &&
       displayVariant_ != DisplayVariant::Red_wHAT_SSD1683 &&
@@ -312,21 +359,21 @@ void Inky::setImage(const Image& image)
 {
   buf_ = image;
   buf_.scale(width_, height_, {ImageScaleMode::Fill});
-  buf_.convert((ImageFormat) colorCapability_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.75f});
+  buf_.toIndexed(colorMap_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.75f});
 }
 
-void Inky::setBorder(InkyColor inky)
+void Inky::setBorder(IndexedColor inky)
 {
   border_ = inky;
 }
 
-void Inky::generatePackedPlane(std::vector<uint8_t>& packed, InkyColor color)
+void Inky::generatePackedPlane(std::vector<uint8_t>& packed, IndexedColor color)
 {
   int size = (buf_.width()*buf_.height());
   int wholeBytes = size/8;
   int packedSize = size/8 + ((size%8 != 0) ? 1 : 0);
   packed.resize(packedSize);
-  const InkyColor* inkyData = (const InkyColor*)buf_.data();
+  const IndexedColor* inkyData = (const IndexedColor*)buf_.data();
   for (int i = 0; i < wholeBytes; ++i)
   {
     packed[i] = ((inkyData[i*8+0] == color) ? (uint8_t)0b10000000 : (uint8_t)0) | 
@@ -381,22 +428,22 @@ void Inky::show()
   // Write LUT DATA
   // sendCommand(InkyCommand::WRITE_LUT, self._luts[self.lut])
 
-  if (border_ == InkyColor::Black)
+  if (border_ == colorMap_.toIndexedColor(ColorName::Black))
   {
     sendCommand(InkyCommand::WRITE_BORDER, 0b00000000);
     // GS Transition + Waveform 00 + GSA 0 + GSB 0
   }  
-  else if (border_ == InkyColor::Red && colorCapability_ == ColorCapability::BlackWhiteRed)
+  else if (border_ == colorMap_.toIndexedColor(ColorName::Red))
   {
     sendCommand(InkyCommand::WRITE_BORDER, 0b00000110);
     // GS Transition + Waveform 01 + GSA 1 + GSB 0
   }
-  else if (border_ == InkyColor::Red && colorCapability_ == ColorCapability::BlackWhiteYellow)
+  else if (border_ == colorMap_.toIndexedColor(ColorName::Yellow))
   {
     sendCommand(InkyCommand::WRITE_BORDER, 0b00001111);
     // GS Transition + Waveform 11 + GSA 1 + GSB 1
   }
-  else if (border_ == InkyColor::White)
+  else if (border_ == colorMap_.toIndexedColor(ColorName::White))
   {
     sendCommand(InkyCommand::WRITE_BORDER, 0b00000001);
     // GS Transition + Waveform 00 + GSA 0 + GSB 1
@@ -407,20 +454,19 @@ void Inky::show()
   sendCommand(InkyCommand::SET_RAMYCOUNT, {0x00, 0x00});
 
   // Write the images to display RAM
-  generatePackedPlane(whitePlane_, InkyColor::White);
+  for (int i=0; i < colorMap_.size(); ++i)
+  {
+    generatePackedPlane(planes_[i], colorMap_.indexedColors()[i]);
+    if (i==0)
+    {
+      sendCommand(InkyCommand::WRITE_RAM, planes_[i]);
+    }
+    else if (i == 1)
+    {
+      sendCommand(InkyCommand::WRITE_ALTRAM, planes_[i]);
+    }
+  }
 
-  sendCommand(InkyCommand::WRITE_RAM, whitePlane_);
-  if (colorCapability_ == ColorCapability::BlackWhiteRed)
-  {
-    generatePackedPlane(colorPlane_, InkyColor::Red);
-    sendCommand(InkyCommand::WRITE_ALTRAM, colorPlane_);
-  }
-  else if (colorCapability_ == ColorCapability::BlackWhiteYellow)
-  {
-    generatePackedPlane(colorPlane_, InkyColor::Yellow);
-    sendCommand(InkyCommand::WRITE_ALTRAM, colorPlane_);
-  }
-  
   waitForBusy();
   sendCommand(InkyCommand::MASTER_ACTIVATE);
 

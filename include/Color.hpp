@@ -1,19 +1,49 @@
 #pragma once
 
 #include <stdint.h>
+#include <unordered_map>
+#include <vector>
 
-enum class InkyColor : uint8_t
+enum class ColorName
 {
-  White = 0,
-  Black = 1,
-  Red = 2,
-  Yellow = 2
+  White,
+  Red,
+  Orange,
+  Yellow,
+  Green,
+  Blue,
+  Black
 };
 
-#pragma pack(push, 1)
+typedef uint8_t IndexedColor;
 struct RGBAColor;
 struct HSVColor;
 struct LabColor;
+struct IndexedColorMap
+{
+  IndexedColorMap() = default;
+  IndexedColorMap(std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> mapping);
+  IndexedColor toIndexedColor(const LabColor& color, LabColor& error) const;
+  IndexedColor toIndexedColor(const RGBAColor& color) const;
+  IndexedColor toIndexedColor(const LabColor& color) const;
+  IndexedColor toIndexedColor(const ColorName) const;
+  RGBAColor toRGBAColor(const IndexedColor indexedColor) const;
+  LabColor toLabColor(const IndexedColor indexedColor) const;
+  uint8_t size() const;
+  const std::vector<IndexedColor>& indexedColors() const;
+  const std::vector<ColorName>& namedColors() const;
+private:
+  std::vector<IndexedColor> indexedColors_;
+  std::vector<ColorName> namedColors_;
+  std::unordered_map<IndexedColor,ColorName> indexToName;
+  std::unordered_map<IndexedColor,RGBAColor> indexToRgba;
+  std::unordered_map<IndexedColor,LabColor> indexToLab;
+  std::unordered_map<ColorName,IndexedColor> nameToIndex;
+  std::unordered_map<ColorName,RGBAColor> nameToRgba;
+  std::unordered_map<ColorName,LabColor> nameToLab;
+};
+
+#pragma pack(push, 1)
 struct HSVColor
 {
   float H = 0.0f;
@@ -84,5 +114,4 @@ struct LabColor
 
   float deltaE(const LabColor& other) const;
 };
-
 #pragma pack(pop)

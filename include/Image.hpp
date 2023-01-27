@@ -11,10 +11,7 @@
 enum class ImageFormat : int
 {
   RGBA = 0,
-  InkyBW = 1,
-  InkyBWR = 2,
-  InkyBWY = 3,
-  SevenColor = 5
+  IndexedColor = 1
 };
 
 enum class ImageScaleMode
@@ -49,7 +46,7 @@ enum class DitherMode
   Pattern // Uses classic 17 pattern swatches
 };
 
-struct ImageConversionSettings
+struct ImageDitherSettings
 {
   // When converting from RGBA to an Inky image mode, this dithering mode will be used.
   DitherMode ditherMode = DitherMode::Diffusion;
@@ -76,11 +73,14 @@ struct ImageScaleSettings
 class Image
 {
 public:
-    // Construct a 0x0 image with no data allocated
+    // Construct an RGBA image with no data
     Image();
 
-    // Construct an image with the specified size and format, allocating memory.
-    Image(int width, int height, ImageFormat = ImageFormat::RGBA);
+    // Construct an RGBA image with the specified size, allocating memory.
+    Image(int width, int height);
+
+    // Construct an indexed image with the specified size and color map, allocating memory.
+    Image(int width, int height, IndexedColorMap colorMap);
 
     // Get a pointer to the first pixel element
     uint8_t* data();
@@ -97,15 +97,21 @@ public:
     // Get the image format
     ImageFormat format() const;
 
+    const IndexedColorMap& colorMap() const;
+
     // Get the bounding box of this image's pixel grid
     BoundingBox bounds() const;
 
     // Get the number of bytes per pixel
     int bytesPerPixel() const;
 
-    // Convert the image to Inky or RGBA formats. Specify a destination image for the conversion
+    // Convert an image to indexed format. Specify a destination image for the conversion
     // or leave dest as nullptr to perform an in-place conversion.
-    void convert(ImageFormat format, ImageConversionSettings settings = ImageConversionSettings(), Image* dest = nullptr);
+    void toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings(), Image* dest = nullptr);
+
+    // Convert an image to RGBA format. Specify a destination image for the conversion
+    // or leave dest as nullptr to perform an in-place conversion.
+    void toRGBA(Image* dest = nullptr);
 
     // Scale the image to the specified size. Specify a destination image for the operation
     // or leave dest as nullptr to perform the operation in-place.
@@ -123,7 +129,7 @@ public:
     void writePng(const std::string& imagePath);
 
     // Open a PNG file from disk and construct an image around it
-    static Image FromPngFile(const std::string& imagePath, ImageFormat format = ImageFormat::RGBA, ImageConversionSettings settings = {});
+    static Image FromPngFile(const std::string& imagePath);
 
     // Create a new image containing a QR code
     static Image FromQrPayload(const std::string& qrPayload);
@@ -134,4 +140,5 @@ private:
     int width_, height_;
     ImageFormat format_;
     std::vector<uint8_t> data_;
+    IndexedColorMap colorMap_;
 };

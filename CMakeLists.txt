@@ -11,7 +11,7 @@ add_executable( ${PROJECT_NAME}
                     src/BoundingBox.cpp
                     src/Color.cpp
                     src/Image.cpp
-                    src/ImageText.cpp
+                    src/Text.cpp
                     src/Dither.cpp
                     src/Inky.cpp
                     src/I2CDevice.cpp
