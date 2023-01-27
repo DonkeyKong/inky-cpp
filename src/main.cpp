@@ -24,18 +24,18 @@ int main(int argc, char *argv[])
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
 
-  Inky display;
+  auto display = Inky::Create();
   HttpService http;
 
   // Get the URL to show from the HttpService
   std::string configURL = fmt::format("http://{}", http.ListeningInterface());
   auto qrCode = Image::FromQrPayload(configURL);
-  qrCode.scale(display.width(), display.height()-50, {.scaleMode = ImageScaleMode::Fit, .interpolationMode = ImageInterpolationMode::Nearest});
-  qrCode.crop(0, 0, display.width(), display.height());
+  qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ImageScaleMode::Fit, .interpolationMode = ImageInterpolationMode::Nearest});
+  qrCode.crop(0, 0, display->info().width, display->info().height);
   Text::Draw(configURL, qrCode, 200, 250, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
   Text::Draw("Scan the QR code to upload a new photo.", qrCode, 200, 270, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-  display.setImage(qrCode);
-  display.show();
+  display->setImage(qrCode);
+  display->show();
   
   // svr.Post("/content_receiver",
   // [&](const Request &req, Response &res, const ContentReader &content_reader) {

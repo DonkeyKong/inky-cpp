@@ -8,7 +8,6 @@ class I2CDevice
 public:
   I2CDevice(uint8_t deviceId, std::string i2cDeviceName = "/dev/i2c-1");
   virtual ~I2CDevice();
-protected: 
   // Write the data in buf to the provided address 
   bool writeI2C(uint16_t addr, const std::vector<uint8_t>& buf = std::vector<uint8_t>());
   // Write the data in buf to the provided address

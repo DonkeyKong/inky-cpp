@@ -1,14 +1,13 @@
 #pragma once
 
 #include "Image.hpp"
-#include "I2CDevice.hpp"
-#include "SPIDevice.hpp"
-
 #include <vector>
 
-class Inky : public I2CDevice, public SPIDevice
+class Inky
 {
 public:
+
+  static std::unique_ptr<Inky> Create();
 
   enum class ColorCapability : uint8_t
   {
@@ -43,43 +42,19 @@ public:
       Red_wHAT_SSD1683 = 18,
       Yellow_wHAT_SSD1683 = 19
   };
+  struct DisplayInfo
+  {
+    uint16_t width;
+    uint16_t height;
+    ColorCapability colorCapability;
+    uint8_t pcbVariant;
+    DisplayVariant displayVariant;
+    std::string writeTime;
+  };
 
-  enum class InkyCommand : uint8_t;
-
-  Inky();
-  ~Inky();
-  void setImage(const Image& image);
-  void setBorder(IndexedColor color);
-  void show();
-
-  uint16_t width() const;
-  uint16_t height() const;
-  ColorCapability colorCapability() const;
-  const IndexedColorMap& colorMap() const;
-  uint8_t pcbVariant() const;
-  DisplayVariant displayVariant() const;
-  std::string writeTime() const;
-
-private:
-  uint16_t width_;
-  uint16_t height_;
-  ColorCapability colorCapability_;
-  uint8_t pcbVariant_;
-  DisplayVariant displayVariant_;
-  std::string writeTime_;
-  IndexedColor border_;
-  Image buf_;
-  IndexedColorMap colorMap_;
-  std::vector<std::vector<uint8_t>> planes_;
-
-  void readEeprom();
-  void reset();
-  void waitForBusy(int timeoutMs = 5000);
-  void sendCommand(InkyCommand command);
-  void sendCommand(InkyCommand command, uint8_t param);
-  void sendCommand(InkyCommand command, const std::vector<uint8_t>& params);
-  void generatePackedPlane(std::vector<uint8_t>& packed, IndexedColor color);
-  void sendBuffer(const uint8_t* data, int len);
-  void sendBuffer(const std::vector<uint8_t>& data);
-  void sendByte(uint8_t data);
+  virtual ~Inky() = 0;
+  virtual void setImage(const Image& image) = 0;
+  virtual void setBorder(IndexedColor color) = 0;
+  virtual void show() = 0;
+  virtual const DisplayInfo& info() const = 0;
 };
