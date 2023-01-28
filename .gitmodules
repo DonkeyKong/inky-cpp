@@ -6,10 +6,6 @@
 	path = deps/QR-Code-generator
 	url = https://github.com/nayuki/QR-Code-generator.git
 	shallow = true
-[submodule "deps/eigen"]
-	path = deps/eigen
-	url = https://gitlab.com/libeigen/eigen.git
-	shallow = true
 [submodule "deps/single-header-image-resampler"]
 	path = deps/single-header-image-resampler
 	url = https://github.com/DonkeyKong/single-header-image-resampler.git
