@@ -99,6 +99,8 @@ HttpService::HttpService()
 
   srv = std::make_unique<httplib::Server>();
 
+  srv->set_payload_max_length(1024 * 1024 * 100); // 100MB
+
   // Setup the HTTP API
   setupCallbacks();
 

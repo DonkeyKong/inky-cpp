@@ -3,12 +3,19 @@
   <head>
     <title>Inky Frame Image Upload</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta charset="UTF-8">
     <link rel="stylesheet" href="inky.css">
   </head>
   <script src="inky.js"></script>
   <body onload="inkyMain();">
     <h1>Inky Image Upload <span class="version">alpha</span></h1>
-    <form action="/upload">
-      <input type="file" id="imageFile" name="filename">
+
+    <form action="/post_photo" method="post" enctype="multipart/form-data">
+      <div>
+          <label for="file">Select files</label>
+          <input name="images" id="file" type="file" />
+      </div>
+      <button type="submit">Upload</button>
     </form>
+
 </html>

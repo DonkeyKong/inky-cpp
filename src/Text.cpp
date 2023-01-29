@@ -12,7 +12,7 @@ static Image loadFont(const std::string& path)
         {ColorName::Black, 0, {0,0,0}},
         {ColorName::White, 1, {255,255,255}}
   });
-  Image font = Image::FromPngFile(path);
+  Image font = Image::FromFile(path);
   // Create a binarized index image of the font
   font.toIndexed(colorMap, {.ditherAccuracy = 0.0f});
   return font;

@@ -23,46 +23,82 @@ using namespace magic_enum::ostream_operators;
 
 static const uint8_t InkyEEPROMI2CDeviceId = 0x50;
 static const std::string InkySPIDevice = "/dev/spidev0.0";
-static const int InkySPIDeviceSpeedHz = 10000000;
-static const int InkyDcGPIO = 22;
-static const int InkyResetGPIO = 27;
-static const int InkyBusyGPIO = 17;
+
+enum class InkyGpioPin : int
+{
+  RESET_PIN = 27,
+  BUSY_PIN = 17,
+  DC_PIN = 22,
+  MOSI_PIN = 10,
+  SCLK_PIN = 11,
+  CS0_PIN = 8,
+};
 
 // Constants for SSD1608 driver IC
 enum class InkyCommand : uint8_t
 {
-  DRIVER_CONTROL = 0x01,
-  GATE_VOLTAGE = 0x03,
-  SOURCE_VOLTAGE = 0x04,
-  DISPLAY_CONTROL = 0x07,
-  NON_OVERLAP = 0x0B,
-  BOOSTER_SOFT_START = 0x0C,
-  GATE_SCAN_START = 0x0F,
-  DEEP_SLEEP = 0x10,
-  DATA_MODE = 0x11,
-  SW_RESET = 0x12,
-  TEMP_WRITE = 0x1A,
-  TEMP_READ = 0x1B,
-  TEMP_CONTROL = 0x18,
-  TEMP_LOAD = 0x1A,
-  MASTER_ACTIVATE = 0x20,
-  DISP_CTRL1 = 0x21,
-  DISP_CTRL2 = 0x22,
-  WRITE_RAM = 0x24,
-  WRITE_ALTRAM = 0x26,
-  READ_RAM = 0x25,
-  VCOM_SENSE = 0x2B,
-  VCOM_DURATION = 0x2C,
-  WRITE_VCOM = 0x2C,
-  READ_OTP = 0x2D,
-  WRITE_LUT = 0x32,
-  WRITE_DUMMY = 0x3A,
-  WRITE_GATELINE = 0x3B,
-  WRITE_BORDER = 0x3C,
-  SET_RAMXPOS = 0x44,
-  SET_RAMYPOS = 0x45,
-  SET_RAMXCOUNT = 0x4E,
-  SET_RAMYCOUNT = 0x4F,
+  SSD1683_DRIVER_CONTROL = 0x01,
+  SSD1683_GATE_VOLTAGE = 0x03,
+  SSD1683_SOURCE_VOLTAGE = 0x04,
+  SSD1683_DISPLAY_CONTROL = 0x07,
+  SSD1683_NON_OVERLAP = 0x0B,
+  SSD1683_BOOSTER_SOFT_START = 0x0C,
+  SSD1683_GATE_SCAN_START = 0x0F,
+  SSD1683_DEEP_SLEEP = 0x10,
+  SSD1683_DATA_MODE = 0x11,
+  SSD1683_SW_RESET = 0x12,
+  SSD1683_TEMP_WRITE = 0x1A,
+  SSD1683_TEMP_READ = 0x1B,
+  SSD1683_TEMP_CONTROL = 0x18,
+  SSD1683_TEMP_LOAD = 0x1A,
+  SSD1683_MASTER_ACTIVATE = 0x20,
+  SSD1683_DISP_CTRL1 = 0x21,
+  SSD1683_DISP_CTRL2 = 0x22,
+  SSD1683_WRITE_RAM = 0x24,
+  SSD1683_WRITE_ALTRAM = 0x26,
+  SSD1683_READ_RAM = 0x25,
+  SSD1683_VCOM_SENSE = 0x2B,
+  SSD1683_VCOM_DURATION = 0x2C,
+  SSD1683_WRITE_VCOM = 0x2C,
+  SSD1683_READ_OTP = 0x2D,
+  SSD1683_WRITE_LUT = 0x32,
+  SSD1683_WRITE_DUMMY = 0x3A,
+  SSD1683_WRITE_GATELINE = 0x3B,
+  SSD1683_WRITE_BORDER = 0x3C,
+  SSD1683_SET_RAMXPOS = 0x44,
+  SSD1683_SET_RAMYPOS = 0x45,
+  SSD1683_SET_RAMXCOUNT = 0x4E,
+  SSD1683_SET_RAMYCOUNT = 0x4F,
+
+  UC8159_PSR = 0x00,
+  UC8159_PWR = 0x01,
+  UC8159_POF = 0x02,
+  UC8159_PFS = 0x03,
+  UC8159_PON = 0x04,
+  UC8159_BTST = 0x06,
+  UC8159_DSLP = 0x07,
+  UC8159_DTM1 = 0x10,
+  UC8159_DSP = 0x11,
+  UC8159_DRF = 0x12,
+  UC8159_IPC = 0x13,
+  UC8159_PLL = 0x30,
+  UC8159_TSC = 0x40,
+  UC8159_TSE = 0x41,
+  UC8159_TSW = 0x42,
+  UC8159_TSR = 0x43,
+  UC8159_CDI = 0x50,
+  UC8159_LPD = 0x51,
+  UC8159_TCON = 0x60,
+  UC8159_TRES = 0x61,
+  UC8159_DAM = 0x65,
+  UC8159_REV = 0x70,
+  UC8159_FLG = 0x71,
+  UC8159_AMV = 0x80,
+  UC8159_VV = 0x81,
+  UC8159_VDCS = 0x82,
+  UC8159_PWS = 0xE3,
+  UC8159_TSSET = 0xE5,
+
   NOP = 0xFF,
 };
 
@@ -98,7 +134,7 @@ protected:
   Image buf_;
   IndexedColorMap colorMap_;
 
-  InkyBase(DisplayInfo info); 
+  InkyBase(DisplayInfo info, int spiSpeedHz); 
 
   virtual void setImage(const Image& image) override;
   virtual void setBorder(IndexedColor color) override;
@@ -115,7 +151,7 @@ protected:
   static void sleep(double milliseconds);
 };
 
-InkyBase::InkyBase(DisplayInfo displayInfo) : SPIDevice(InkySPIDevice, InkySPIDeviceSpeedHz),
+InkyBase::InkyBase(DisplayInfo displayInfo, int spiSpeedHz) : SPIDevice(InkySPIDevice, spiSpeedHz),
   info_(displayInfo)
 {
   std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> displayColors;
@@ -164,7 +200,7 @@ InkyBase::InkyBase(DisplayInfo displayInfo) : SPIDevice(InkySPIDevice, InkySPIDe
 
 void InkyBase::sendCommand(InkyCommand command)
 {
-  gpioWrite(InkyDcGPIO, 0);
+  gpioWrite(InkyGpioPin::DC_PIN, 0);
   #ifdef DEBUG_SPI
   std::cout << "Command " << command << " ret: " << 
   #endif
@@ -176,7 +212,7 @@ void InkyBase::sendCommand(InkyCommand command)
 
 void InkyBase::sendCommand(InkyCommand command, uint8_t param)
 {
-  gpioWrite(InkyDcGPIO, 0);
+  gpioWrite(InkyGpioPin::DC_PIN, 0);
   #ifdef DEBUG_SPI
   std::cout << "Command " << command << " ret: " << 
   #endif
@@ -189,7 +225,7 @@ void InkyBase::sendCommand(InkyCommand command, uint8_t param)
 
 void InkyBase::sendCommand(InkyCommand command, const std::vector<uint8_t>& params)
 {
-  gpioWrite(InkyDcGPIO, 0);
+  gpioWrite(InkyGpioPin::DC_PIN, 0);
   #ifdef DEBUG_SPI
   std::cout << "Command " << command << " ret: " << 
   #endif
@@ -202,7 +238,7 @@ void InkyBase::sendCommand(InkyCommand command, const std::vector<uint8_t>& para
 
 void InkyBase::sendBuffer(const uint8_t* buffer, int len)
 {
-  gpioWrite(InkyDcGPIO, 1);
+  gpioWrite(InkyGpioPin::DC_PIN, 1);
   #ifdef DEBUG_SPI
   std::cout << "Sent buffer len " << len << " ret: " << 
   #endif
@@ -214,7 +250,7 @@ void InkyBase::sendBuffer(const uint8_t* buffer, int len)
 
 void InkyBase::sendBuffer(const std::vector<uint8_t>& buffer)
 {
-  gpioWrite(InkyDcGPIO, 1);
+  gpioWrite(InkyGpioPin::DC_PIN, 1);
   #ifdef DEBUG_SPI
   std::cout << "Sent buffer len " << buffer.size() << " ret: " << 
   #endif
@@ -226,7 +262,7 @@ void InkyBase::sendBuffer(const std::vector<uint8_t>& buffer)
 
 void InkyBase::sendByte(uint8_t data)
 {
-  gpioWrite(InkyDcGPIO, 1);
+  gpioWrite(InkyGpioPin::DC_PIN, 1);
   #ifdef DEBUG_SPI
   std::cout << "Sent byte ret: " << 
   #endif
@@ -239,7 +275,7 @@ void InkyBase::sendByte(uint8_t data)
 void InkyBase::waitForBusy(int timeoutMs)
 {
   int i = 0;
-  while (gpioRead(InkyBusyGPIO) != 0)
+  while (gpioRead(InkyGpioPin::BUSY_PIN) != 0)
   {
     sleep(10);
     ++i;
@@ -332,17 +368,18 @@ SimulatedInky::SimulatedInky() : InkyBase(
     .pcbVariant = 12,
     .displayVariant = DisplayVariant::Red_wHAT_SSD1683,
     .writeTime = "2022-09-02 11:54:06.4"
-  }
+  }, 0
 ) {}
 
 void SimulatedInky::show()
 {
-  buf_.writePng(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+  buf_.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
 }
 
 class InkySSD1683 final : public InkyBase
 {
   private: 
+  static const int SPIDeviceSpeedHz = 10000000;
   std::vector<uint8_t> whitePlane;
   std::vector<uint8_t> colorPlane;
   void reset();
@@ -351,7 +388,7 @@ class InkySSD1683 final : public InkyBase
   virtual void show() override;
 };
 
-InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info)
+InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
 {
   if (info.displayVariant != DisplayVariant::Black_wHAT_SSD1683 &&
       info.displayVariant != DisplayVariant::Red_wHAT_SSD1683 &&
@@ -365,24 +402,24 @@ InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info)
   {
       throw std::runtime_error("Failed to setup GPIO\n");
   }
-  gpioSetMode(InkyDcGPIO, PI_OUTPUT);
-  gpioSetPullUpDown(InkyDcGPIO, PI_PUD_OFF);
-  gpioWrite(InkyDcGPIO, 0);
-  gpioSetMode(InkyResetGPIO, PI_OUTPUT);
-  gpioSetPullUpDown(InkyResetGPIO, PI_PUD_OFF);
-  gpioWrite(InkyResetGPIO, 1);
-  gpioSetMode(InkyBusyGPIO, PI_INPUT);
-  gpioSetPullUpDown(InkyBusyGPIO, PI_PUD_OFF);
+  gpioSetMode(InkyGpioPin::DC_PIN, PI_OUTPUT);
+  gpioSetPullUpDown(InkyGpioPin::DC_PIN, PI_PUD_OFF);
+  gpioWrite(InkyGpioPin::DC_PIN, 0);
+  gpioSetMode(InkyGpioPin::RESET_PIN, PI_OUTPUT);
+  gpioSetPullUpDown(InkyGpioPin::RESET_PIN, PI_PUD_OFF);
+  gpioWrite(InkyGpioPin::RESET_PIN, 1);
+  gpioSetMode(InkyGpioPin::BUSY_PIN, PI_INPUT);
+  gpioSetPullUpDown(InkyGpioPin::BUSY_PIN, PI_PUD_OFF);
 }
 
 void InkySSD1683::reset()
 {
   // Perform a hardware reset
-  gpioWrite(InkyResetGPIO, 0);
+  gpioWrite(InkyGpioPin::RESET_PIN, 0);
   sleep(500);
-  gpioWrite(InkyResetGPIO, 1);
+  gpioWrite(InkyGpioPin::RESET_PIN, 1);
   sleep(500);
-  sendCommand(InkyCommand::SW_RESET);
+  sendCommand(InkyCommand::SSD1683_SW_RESET);
   sleep(1000);
   waitForBusy();
 }
@@ -391,69 +428,73 @@ void InkySSD1683::show()
 {
   reset();
 
-  sendCommand(InkyCommand::DRIVER_CONTROL, {(uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8), 0x00});
+  sendCommand(InkyCommand::SSD1683_DRIVER_CONTROL, {(uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8), 0x00});
   // Set dummy line period
-  sendCommand(InkyCommand::WRITE_DUMMY, 0x1B);
+  sendCommand(InkyCommand::SSD1683_WRITE_DUMMY, 0x1B);
   // Set Line Width
-  sendCommand(InkyCommand::WRITE_GATELINE, 0x0B);
+  sendCommand(InkyCommand::SSD1683_WRITE_GATELINE, 0x0B);
   // Data entry squence (scan direction leftward and downward)
-  sendCommand(InkyCommand::DATA_MODE, 0x03);
+  sendCommand(InkyCommand::SSD1683_DATA_MODE, 0x03);
   // Set ram X start and end position
-  sendCommand(InkyCommand::SET_RAMXPOS, {0x00, (uint8_t)((info_.width / 8) - 1)});
+  sendCommand(InkyCommand::SSD1683_SET_RAMXPOS, {0x00, (uint8_t)((info_.width / 8) - 1)});
   // Set ram Y start and end position
-  sendCommand(InkyCommand::SET_RAMYPOS, {0x00, 0x00, (uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8)});
+  sendCommand(InkyCommand::SSD1683_SET_RAMYPOS, {0x00, 0x00, (uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8)});
   // VCOM Voltage
-  sendCommand(InkyCommand::WRITE_VCOM, 0x70);
+  sendCommand(InkyCommand::SSD1683_WRITE_VCOM, 0x70);
   // Write LUT DATA
   // sendCommand(InkyCommand::WRITE_LUT, self._luts[self.lut])
 
   if (border_ == colorMap_.toIndexedColor(ColorName::Black))
   {
-    sendCommand(InkyCommand::WRITE_BORDER, 0b00000000);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000000);
     // GS Transition + Waveform 00 + GSA 0 + GSB 0
   }  
   else if (border_ == colorMap_.toIndexedColor(ColorName::Red))
   {
-    sendCommand(InkyCommand::WRITE_BORDER, 0b00000110);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000110);
     // GS Transition + Waveform 01 + GSA 1 + GSB 0
   }
   else if (border_ == colorMap_.toIndexedColor(ColorName::Yellow))
   {
-    sendCommand(InkyCommand::WRITE_BORDER, 0b00001111);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00001111);
     // GS Transition + Waveform 11 + GSA 1 + GSB 1
   }
   else if (border_ == colorMap_.toIndexedColor(ColorName::White))
   {
-    sendCommand(InkyCommand::WRITE_BORDER, 0b00000001);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000001);
     // GS Transition + Waveform 00 + GSA 0 + GSB 1
   }
 
   // Set RAM address to 0, 0
-  sendCommand(InkyCommand::SET_RAMXCOUNT, 0x00);
-  sendCommand(InkyCommand::SET_RAMYCOUNT, {0x00, 0x00});
+  sendCommand(InkyCommand::SSD1683_SET_RAMXCOUNT, 0x00);
+  sendCommand(InkyCommand::SSD1683_SET_RAMYCOUNT, {0x00, 0x00});
 
   // Write the images to display RAM
   generatePackedPlane(buf_, whitePlane, colorMap_.toIndexedColor(ColorName::White));
-  sendCommand(InkyCommand::WRITE_RAM, whitePlane);
+  sendCommand(InkyCommand::SSD1683_WRITE_RAM, whitePlane);
 
   if (info_.colorCapability == ColorCapability::BlackWhiteRed)
   {
     generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Red));
-    sendCommand(InkyCommand::WRITE_ALTRAM, colorPlane);
+    sendCommand(InkyCommand::SSD1683_WRITE_ALTRAM, colorPlane);
   }
   else if (info_.colorCapability == ColorCapability::BlackWhiteYellow)
   {
     generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Yellow));
-    sendCommand(InkyCommand::WRITE_ALTRAM, colorPlane);
+    sendCommand(InkyCommand::SSD1683_WRITE_ALTRAM, colorPlane);
   }
 
   waitForBusy();
-  sendCommand(InkyCommand::MASTER_ACTIVATE);
+  sendCommand(InkyCommand::SSD1683_MASTER_ACTIVATE);
 }
 
 class InkyUC8159 final : public InkyBase
 {
   private: 
+
+
+
+  static const int SPIDeviceSpeedHz = 3000000;
   std::vector<uint8_t> packed;
   void reset();
   public:
@@ -461,7 +502,7 @@ class InkyUC8159 final : public InkyBase
   virtual void show() override;
 };
 
-InkyUC8159::InkyUC8159(DisplayInfo info) : InkyBase(info)
+InkyUC8159::InkyUC8159(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
 {
 
 }

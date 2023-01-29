@@ -169,7 +169,7 @@ static std::vector<LabColor> getLabVector(const Image& sourceImage, ImageFormat 
   return labVals;
 }
 
-void diffuseError(std::vector<LabColor>& labVals, const LabColor& oldValue, const LabColor& error, const int x, const int y, const int width, const int height)
+void diffuseError_dk(std::vector<LabColor>& labVals, const LabColor& oldValue, const LabColor& error, const int x, const int y, const int width, const int height)
 {
   if (x < width-1)                                           // Traditional weights...
     labVals[ (x+1)+(y)*width ] += error *   (5.0f / 16.0f);  // 7
@@ -179,6 +179,18 @@ void diffuseError(std::vector<LabColor>& labVals, const LabColor& oldValue, cons
     labVals[ (x)+(y+1)*width ] += error *   (5.0f / 16.0f);  // 5
   if (x < width-1 && y < height-1)
     labVals[ (x+1)+(y+1)*width ] += error * (3.0f / 16.0f);  // 1
+}
+
+void diffuseError(std::vector<LabColor>& labVals, const LabColor& oldValue, const LabColor& error, const int x, const int y, const int width, const int height)
+{
+  if (x < width-1)
+    labVals[ (x+1)+(y)*width ] += error *   (7.0f / 16.0f);  
+  if (x > 0 && y < height-1)
+    labVals[ (x-1)+(y+1)*width ] += error * (3.0f / 16.0f);  
+  if (y < height-1)
+    labVals[ (x)+(y+1)*width ] += error *   (5.0f / 16.0f);  
+  if (x < width-1 && y < height-1)
+    labVals[ (x+1)+(y+1)*width ] += error * (1.0f / 16.0f);  
 }
 
 template <typename T> 

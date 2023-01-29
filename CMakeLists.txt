@@ -17,6 +17,7 @@ add_executable( ${PROJECT_NAME}
                     src/I2CDevice.cpp
                     src/SPIDevice.cpp
                     src/HttpService.cpp
+                    src/QRCode.cpp
                     src/main.cpp )
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)

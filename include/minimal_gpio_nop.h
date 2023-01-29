@@ -71,18 +71,16 @@ static volatile int pi_is_2711 = 0;
 #define PI_ALT4   3
 #define PI_ALT5   2
 
-void gpioSetMode(unsigned gpio, unsigned mode) { }
-
-int gpioGetMode(unsigned gpio) { return 0; }
-
 #define PI_PUD_OFF  0
 #define PI_PUD_DOWN 1
 #define PI_PUD_UP   2
 
-void gpioSetPullUpDown(unsigned gpio, unsigned pud) { }
-int gpioRead(unsigned gpio) { return 0; }
-void gpioWrite(unsigned gpio, unsigned level) { }
-void gpioTrigger(unsigned gpio, unsigned pulseLen, unsigned level) { }
+template <typename T> void gpioSetMode(T gpio, unsigned mode) { }
+template <typename T> int gpioGetMode(T gpio) { return 0; }
+template <typename T> void gpioSetPullUpDown(T gpio, unsigned pud) { }
+template <typename T> int gpioRead(T gpio) { return 0; }
+template <typename T> void gpioWrite(T gpio, unsigned level) { }
+template <typename T> void gpioTrigger(T gpio, unsigned pulseLen, unsigned level) { }
 uint32_t gpioReadBank1(void) { return 0; }
 uint32_t gpioReadBank2(void) { return 0; }
 void gpioClearBank1(uint32_t bits) {  }

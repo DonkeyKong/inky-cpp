@@ -74,8 +74,8 @@ static volatile uint32_t* gpioReg = (uint32_t*)MAP_FAILED;
 static volatile uint32_t* systReg = (uint32_t*)MAP_FAILED;
 static volatile uint32_t* bscsReg = (uint32_t*)MAP_FAILED;
 
-#define PI_BANK (gpio>>5)
-#define PI_BIT  (1<<(gpio&0x1F))
+#define PI_BANK ((unsigned)gpio>>5)
+#define PI_BIT  (1<<((unsigned)gpio&0x1F))
 
 /* gpio modes. */
 
@@ -88,22 +88,24 @@ static volatile uint32_t* bscsReg = (uint32_t*)MAP_FAILED;
 #define PI_ALT4   3
 #define PI_ALT5   2
 
-void gpioSetMode(unsigned gpio, unsigned mode)
+template <typename T>
+void gpioSetMode(T gpio, unsigned mode)
 {
    int reg, shift;
 
-   reg   =  gpio/10;
-   shift = (gpio%10) * 3;
+   reg   =  (unsigned)gpio/10;
+   shift = ((unsigned)gpio%10) * 3;
 
    gpioReg[reg] = (gpioReg[reg] & ~(7<<shift)) | (mode<<shift);
 }
 
-int gpioGetMode(unsigned gpio)
+template <typename T>
+int gpioGetMode(T gpio)
 {
    int reg, shift;
 
-   reg   =  gpio/10;
-   shift = (gpio%10) * 3;
+   reg   =  (unsigned)gpio/10;
+   shift = ((unsigned)gpio%10) * 3;
 
    return (*(gpioReg + reg) >> shift) & 7;
 }
@@ -114,9 +116,10 @@ int gpioGetMode(unsigned gpio)
 #define PI_PUD_DOWN 1
 #define PI_PUD_UP   2
 
-void gpioSetPullUpDown(unsigned gpio, unsigned pud)
+template <typename T>
+void gpioSetPullUpDown(T gpio, unsigned pud)
 {
-   int shift = (gpio & 0xf) << 1;
+   int shift = ((unsigned)gpio & 0xf) << 1;
    uint32_t bits;
    uint32_t pull;
 
@@ -129,10 +132,10 @@ void gpioSetPullUpDown(unsigned gpio, unsigned pud)
          case PI_PUD_DOWN: pull = 2; break;
       }
 
-      bits = *(gpioReg + GPPUPPDN0 + (gpio>>4));
+      bits = *(gpioReg + GPPUPPDN0 + ((unsigned)gpio>>4));
       bits &= ~(3 << shift);
       bits |= (pull << shift);
-      *(gpioReg + GPPUPPDN0 + (gpio>>4)) = bits;
+      *(gpioReg + GPPUPPDN0 + ((unsigned)gpio>>4)) = bits;
    }
    else
    {
@@ -150,19 +153,22 @@ void gpioSetPullUpDown(unsigned gpio, unsigned pud)
    }
 }
 
-int gpioRead(unsigned gpio)
+template <typename T>
+int gpioRead(T gpio)
 {
    if ((*(gpioReg + GPLEV0 + PI_BANK) & PI_BIT) != 0) return 1;
    else                                         return 0;
 }
 
-void gpioWrite(unsigned gpio, unsigned level)
+template <typename T>
+void gpioWrite(T gpio, unsigned level)
 {
    if (level == 0) *(gpioReg + GPCLR0 + PI_BANK) = PI_BIT;
    else            *(gpioReg + GPSET0 + PI_BANK) = PI_BIT;
 }
 
-void gpioTrigger(unsigned gpio, unsigned pulseLen, unsigned level)
+template <typename T>
+void gpioTrigger(T gpio, unsigned pulseLen, unsigned level)
 {
    if (level == 0) *(gpioReg + GPCLR0 + PI_BANK) = PI_BIT;
    else            *(gpioReg + GPSET0 + PI_BANK) = PI_BIT;
@@ -281,25 +287,3 @@ int gpioInitialise(void)
    }
    return 0;
 }
-
-// int main(int argc, char *argv[])
-// {
-//    int i;
-// 
-//    if (gpioInitialise() < 0) return 1;
-// 
-//    for (i=0; i<54; i++)
-//    {
-//       printf("gpio=%d tick=%u mode=%d level=%d\n",
-//          i, gpioTick(), gpioGetMode(i), gpioRead(i));
-//    }
-// 
-//    for (i=0; i<16; i++)
-//    {
-//       printf("reg=%d val=%8X\n",
-//          i, bscsReg[i]);
-//    }
-// 
-//    return 0;
-// }
-

@@ -107,11 +107,12 @@ public:
 
     // Convert an image to indexed format. Specify a destination image for the conversion
     // or leave dest as nullptr to perform an in-place conversion.
-    void toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings(), Image* dest = nullptr);
+    void toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings());
+    void toIndexed(Image& dest, IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings()) const;
 
-    // Convert an image to RGBA format. Specify a destination image for the conversion
-    // or leave dest as nullptr to perform an in-place conversion.
-    void toRGBA(Image* dest = nullptr);
+    // Convert an image to RGBA format
+    void toRGBA();
+    void toRGBA(Image& dest) const;
 
     // Scale the image to the specified size. Specify a destination image for the operation
     // or leave dest as nullptr to perform the operation in-place.
@@ -123,19 +124,32 @@ public:
     void crop(int x, int y, int width, int height, ImageScaleSettings settings = ImageScaleSettings(), Image* dest = nullptr);
 
     // Read a PNG image from disk. Will change format to RGBA and reset dimensions.
-    void readPng(const std::string& imagePath);
+    void readPngFromFile(const std::string& imagePath);
 
-    // Write a PNG image to disk. Will change format to RGBA on write.
-    void writePng(const std::string& imagePath);
+    // Write a PNG image to disk.
+    void writePngToFile(const std::string& imagePath) const;
 
-    // Open a PNG file from disk and construct an image around it
-    static Image FromPngFile(const std::string& imagePath);
+    // Read a JPG image from a file. Will change format to RGBA and reset dimensions.
+    void readJpegFromFile(const std::string& filename);
 
-    // Create a new image containing a QR code
-    static Image FromQrPayload(const std::string& qrPayload);
+    // Read a JPG image from buffer. Will change format to RGBA and reset dimensions.
+    void readJpegFromBuffer(const std::vector<uint8_t>& buffer);
+    void readJpegFromBuffer(const std::string& buffer);
+    void readJpegFromBuffer(const uint8_t* buffer, size_t len);
 
-    // Access pixel data directly from the image
-    uint8_t& operator[](std::size_t idx);
+    // Write a JPG image to disk.
+    void writeJpegToFile(const std::string& filename, int quality = 75) const;
+
+    // Write a JPG image to a memory buffer
+    std::vector<uint8_t> writeJpegToBuffer(int quality = 75) const;
+
+    // Open a file from disk and construct an image around it
+    static Image FromFile(const std::string& imagePath);
+
+    // Open a file from disk and construct an image around it
+    static Image FromBuffer(const std::vector<uint8_t>& imageBuf);
+    static Image FromBuffer(const std::string& buffer);
+    static Image FromBuffer(const uint8_t* buffer, size_t len);
 private:
     int width_, height_;
     ImageFormat format_;

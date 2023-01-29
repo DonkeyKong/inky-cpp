@@ -1,13 +1,16 @@
 #include "Image.hpp"
 #include "Dither.hpp"
 
+#include <fmt/format.h>
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <cmath>
-#include <map>
+#include <fstream>
+#include <filesystem>
 
 // Hack to fix intellisense with some arm NEON code
 #if __INTELLISENSE__
@@ -16,7 +19,7 @@
 #endif
 
 #include <png.h>
-#include <qrcodegen.hpp>
+#include <turbojpeg.h>
 #include <base_resample.h>
 
 static void abort_(const char *s, ...)
@@ -58,10 +61,13 @@ int Image::bytesPerPixel() const
   return format_ == ImageFormat::RGBA ? 4 : 1;
 }
 
-void Image::toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings, Image* dest)
+void Image::toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings)
 {
-  if (dest == nullptr) dest = this;
+  toIndexed(*this, colorMap, settings);
+}
 
+void Image::toIndexed(Image& dest, IndexedColorMap colorMap, ImageDitherSettings settings) const
+{
   // Conversion type 1: RGBA to indexed
   if (format_ == ImageFormat::RGBA)
   {
@@ -77,34 +83,39 @@ void Image::toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings, Im
     }
 
     // Move the new image buffer into place
-    dest->data_ = std::move(indexImage.data_);
-    dest->width_ = width_;
-    dest->height_ = height_;
-    dest->format_ = ImageFormat::IndexedColor;
-    dest->colorMap_ = colorMap;
+    dest.data_ = std::move(indexImage.data_);
+    dest.width_ = width_;
+    dest.height_ = height_;
+    dest.format_ = ImageFormat::IndexedColor;
+    dest.colorMap_ = colorMap;
     return;
   }
   // Conversion type 2: indexed to indexed (via RGBA)
   else
   {
     Image rgbaImage(width_, height_);
-    toRGBA(&rgbaImage);
-    rgbaImage.toIndexed(colorMap, settings, dest);
+    toRGBA(rgbaImage);
+    rgbaImage.toIndexed(dest, colorMap, settings);
     return;
   }
 }
 
-void Image::toRGBA(Image* dest)
+void Image::toRGBA()
 {
-  if (dest == nullptr) dest = this;
+  toRGBA(*this);
+}
+
+void Image::toRGBA(Image& dest) const
+{
+  bool inPlace = (&dest == this);
 
   // Image is the correct format already!
   // Just copy the data as-is
   if (format_ == ImageFormat::RGBA)
   {
-    if (dest != this)
+    if (!inPlace)
     {
-      dest->data_ = data_;
+      dest.data_ = data_;
     }
   }
   // Conversion type 2: BW/BWR/BWY to RGBA
@@ -117,13 +128,13 @@ void Image::toRGBA(Image* dest)
     {
       rgbaPtr[i] = colorMap_.toRGBAColor(indexedPtr[i]);
     }
-    dest->data_ = std::move(dataRGBA);
+    dest.data_ = std::move(dataRGBA);
   }
   
   // Set the size and format on the destination image
-  dest->width_ = width_;
-  dest->height_ = height_;
-  dest->format_ = ImageFormat::RGBA;
+  dest.width_ = width_;
+  dest.height_ = height_;
+  dest.format_ = ImageFormat::RGBA;
   return;
 }
 
@@ -259,36 +270,161 @@ const IndexedColorMap& Image::colorMap() const
   return colorMap_;
 }
 
-Image Image::FromPngFile(const std::string& imagePath)
+Image Image::FromFile(const std::string& imagePath)
 {
-    Image image(0,0);
-    image.readPng(imagePath);
-    return image;
-}
+    Image image;
+    std::string ext = std::filesystem::path(imagePath).extension();
+    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
 
-Image Image::FromQrPayload(const std::string& qrPayload)
-{
-    auto qr = qrcodegen::QrCode::encodeText(qrPayload.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
-    const int quietZoneSize = 2;
-    Image image (qr.getSize() + quietZoneSize * 2, qr.getSize() + quietZoneSize * 2);
-    auto dataPtr = image.data();
-    for (int y = -quietZoneSize; y < qr.getSize() + quietZoneSize; y++)
+    if (ext == ".png")
     {
-        for (int x = -quietZoneSize; x < qr.getSize() + quietZoneSize; x++)
-        {
-            bool pxIsDark = qr.getModule(x,y);
-            dataPtr[0] = pxIsDark ? 0 : 255;
-            dataPtr[1] = pxIsDark ? 0 : 255;
-            dataPtr[2] = pxIsDark ? 0 : 255;
-            dataPtr[3] = 255;
-            dataPtr += 4;
-        }
+      image.readPngFromFile(imagePath);
     }
-    
+    else if (ext == ".jpg" || ext == ".jpeg" || ext == ".jpe")
+    {
+      image.readJpegFromFile(imagePath);
+    }
+    else
+    {
+      throw std::runtime_error(fmt::format("Unsupported extension '{}'! Only png and jpeg are supported.", ext));
+    }
+
     return image;
 }
 
-void Image::readPng(const std::string& filename)
+Image Image::FromBuffer(const std::string& imageBuf)
+{
+  return FromBuffer((uint8_t*)imageBuf.data(), imageBuf.size());
+}
+
+Image Image::FromBuffer(const std::vector<uint8_t>& imageBuf)
+{
+  return FromBuffer(imageBuf.data(), imageBuf.size());
+}
+
+Image Image::FromBuffer(const uint8_t* imageBuf, size_t len)
+{
+  Image image;
+
+  if (len < 16)
+  {
+    throw std::runtime_error("Buffer is too short to contain an image.");
+  }
+
+  if (imageBuf[0] == 0xFF && imageBuf[1] == 0xD8)
+  {
+    image.readJpegFromBuffer(imageBuf, len);
+  }
+  else
+  {
+    throw std::runtime_error("Unsupported image buffer format! Only jpeg is supported at this time.");
+  }
+
+  return image;
+}
+
+void Image::readJpegFromFile(const std::string& filename)
+{
+  std::basic_ifstream<uint8_t> file(filename, std::ios::binary);
+  std::vector<uint8_t> compressedImage((std::istreambuf_iterator<uint8_t>(file)), std::istreambuf_iterator<uint8_t>());
+  readJpegFromBuffer(compressedImage);
+}
+
+void Image::readJpegFromBuffer(const std::vector<uint8_t>& compressedImage)
+{
+  readJpegFromBuffer(compressedImage.data(), compressedImage.size());
+}
+
+void Image::readJpegFromBuffer(const std::string& compressedImage)
+{
+  readJpegFromBuffer((uint8_t*)compressedImage.data(), compressedImage.size());
+}
+
+void Image::readJpegFromBuffer(const uint8_t* compressedImage, size_t len)
+{
+  int jpegSubsamp;
+  tjhandle _jpegDecompressor = tjInitDecompress();
+  // const cast to deal with C api
+  tjDecompressHeader2(_jpegDecompressor, const_cast<uint8_t*>(compressedImage), len, &width_, &height_, &jpegSubsamp);
+  format_ = ImageFormat::RGBA;
+  data_.resize(width_*height_*4);
+  tjDecompress2(_jpegDecompressor, compressedImage, len, data_.data(), width_, 0/*pitch*/, height_, TJPF_RGBA, TJFLAG_FASTDCT);
+  tjDestroy(_jpegDecompressor);
+}
+
+void Image::writeJpegToFile(const std::string& filename, int quality) const
+{
+  if (width_ < 1 || height_ < 1)
+  {
+    throw std::runtime_error("Cannot save zero-dimension image!");
+  }
+
+  Image dest;
+  const Image* imgToSave = this;
+  if (format_ != ImageFormat::RGBA)
+  {
+    toRGBA(dest);
+    imgToSave = &dest;
+  }
+
+  long unsigned int jpegSize = 0;
+  uint8_t* compressedImage = NULL; //!< Memory is allocated by tjCompress2 if _jpegSize == 0
+
+  tjhandle jpegCompressor = tjInitCompress();
+
+  tjCompress2(jpegCompressor, imgToSave->data(), imgToSave->width_, 0, imgToSave->height_, TJPF_RGBA,
+              &compressedImage, &jpegSize, TJSAMP_444, quality,
+              TJFLAG_FASTDCT);
+
+  tjDestroy(jpegCompressor);
+
+  // Save the buffer to a file
+  try
+  {
+    std::basic_ofstream<uint8_t> file(filename, std::ios::binary | std::ios::trunc);
+    file.write(compressedImage, jpegSize);
+    file.close();
+  }
+  catch (...)
+  {
+    tjFree(compressedImage);
+    std::rethrow_exception(std::current_exception());
+  }
+  tjFree(compressedImage);
+}
+
+std::vector<uint8_t> Image::writeJpegToBuffer(int quality) const
+{
+  if (width_ < 1 || height_ < 1)
+  {
+    throw std::runtime_error("Cannot save zero-dimension image!");
+  }
+
+  Image dest;
+  const Image* imgToSave = this;
+  if (format_ != ImageFormat::RGBA)
+  {
+    toRGBA(dest);
+    imgToSave = &dest;
+  }
+
+  long unsigned int jpegSize = 0;
+  uint8_t* compressedImage = NULL; //!< Memory is allocated by tjCompress2 if _jpegSize == 0
+
+  tjhandle jpegCompressor = tjInitCompress();
+
+  tjCompress2(jpegCompressor, imgToSave->data(), imgToSave->width_, 0, imgToSave->height_, TJPF_RGBA,
+              &compressedImage, &jpegSize, TJSAMP_444, quality,
+              TJFLAG_FASTDCT);
+
+  tjDestroy(jpegCompressor);
+
+  std::vector<uint8_t> imgBuf(compressedImage, compressedImage+jpegSize);
+  tjFree(compressedImage);
+  return imgBuf;
+}
+
+void Image::readPngFromFile(const std::string& filename)
 {
     png_byte color_type;
     png_byte bit_depth;
@@ -372,14 +508,19 @@ void Image::readPng(const std::string& filename)
     }
 }
 
-void Image::writePng(const std::string& filename) 
+void Image::writePngToFile(const std::string& filename) const
 {
+  if (width_ < 1 || height_ < 1)
+  {
+    throw std::runtime_error("Cannot save zero-dimension image!");
+  }
+
   Image dest;
-  Image* imgToSave = this;
+  const Image* imgToSave = this;
   if (format_ != ImageFormat::RGBA)
   {
+    toRGBA(dest);
     imgToSave = &dest;
-    toRGBA(imgToSave);
   }
 
   int y;
@@ -415,7 +556,7 @@ void Image::writePng(const std::string& filename)
   //png_set_filler(png, 0, PNG_FILLER_AFTER);
 
   std::vector<uint8_t*> rows(height_);
-  uint8_t* data = imgToSave->data_.data();
+  uint8_t* data = const_cast<uint8_t*>(imgToSave->data()); // const cast to deal with C api
   for (int y=0; y < height_; ++y)
   {
     rows[y] = data+(y*width_*4);
@@ -457,9 +598,4 @@ BoundingBox Image::bounds() const
 ImageFormat Image::format() const
 {
     return format_;
-}
-
-uint8_t& Image::operator[](std::size_t idx)
-{
-    return data_[idx];
 }
