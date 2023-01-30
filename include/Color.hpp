@@ -12,7 +12,8 @@ enum class ColorName
   Yellow,
   Green,
   Blue,
-  Black
+  Black,
+  Clean
 };
 
 typedef uint8_t IndexedColor;
@@ -41,6 +42,7 @@ struct RGBAColor
   HSVColor toHSV() const;
   LabColor toLab() const;
   uint8_t getBrightestChannel() const;
+  uint8_t getDarkestChannel() const;
   uint8_t getGrayValue() const;
 };
 
@@ -56,6 +58,8 @@ struct LabColor
   float L = 0;
   float a = 0;
   float b = 0;
+
+  RGBAColor toRgba() const;
 
   LabColor operator+ (const LabColor& c)  const
   {
@@ -97,6 +101,9 @@ struct IndexedColorMap
 {
   IndexedColorMap() = default;
   IndexedColorMap(std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> mapping);
+  // Set the colors Black and White to (0,0,0) and (255,255,255) respectively, then rescale the rest
+  void normalizePaletteByRgb(bool pinBlack = true, bool pinWhite = true);
+  void normalizePaletteByLab(bool pinBlack = true, bool pinWhite = true);
   IndexedColor toIndexedColor(const LabColor& color, LabColor& error) const;
   IndexedColor toIndexedColor(const RGBAColor& color) const;
   IndexedColor toIndexedColor(const LabColor& color) const;

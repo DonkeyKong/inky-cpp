@@ -13,7 +13,8 @@
 #include <linux/spi/spidev.h>
 #endif
 
-SPIDevice::SPIDevice(std::string spiDeviceName, uint32_t maxBusSpeedHz, uint32_t maxTransferSizeBytes) : 
+SPIDevice::SPIDevice(std::string spiDeviceName, uint32_t maxBusSpeedHz, uint32_t maxTransferSizeBytes, SPIMode spiMode) : 
+  spiMode_(spiMode),
   maxBusSpeedHz_(maxBusSpeedHz),
   maxTransferSizeBytes_(maxTransferSizeBytes)
 {
@@ -25,13 +26,13 @@ SPIDevice::SPIDevice(std::string spiDeviceName, uint32_t maxBusSpeedHz, uint32_t
     throw std::runtime_error("Failed to open the spi bus device");
   }
 
-	int ret = ioctl(spiFile_, SPI_IOC_WR_MODE, &spiMode_);
+	int ret = ioctl(spiFile_, SPI_IOC_WR_MODE, (uint8_t*)&spiMode_);
 	if (ret == -1)
   {
     throw std::runtime_error("Failed to write mode on the spi bus");
   }
 
-  ret = ioctl(spiFile_, SPI_IOC_RD_MODE, &spiMode_);
+  ret = ioctl(spiFile_, SPI_IOC_RD_MODE, (uint8_t*)&spiMode_);
 	if (ret == -1)
   {
     throw std::runtime_error("Failed to read mode on the spi bus");

@@ -102,27 +102,6 @@ enum class InkyCommand : uint8_t
   NOP = 0xFF,
 };
 
-static const std::vector<uint8_t> BlackLUT 
-{
-  0x02, 0x02, 0x01, 0x11, 0x12, 0x12, 0x22, 0x22, 0x66, 0x69,
-  0x69, 0x59, 0x58, 0x99, 0x99, 0x88, 0x00, 0x00, 0x00, 0x00,
-  0xF8, 0xB4, 0x13, 0x51, 0x35, 0x51, 0x51, 0x19, 0x01, 0x00
-};
-
-static const std::vector<uint8_t> RedLUT 
-{
-  0x02, 0x02, 0x01, 0x11, 0x12, 0x12, 0x22, 0x22, 0x66, 0x69,
-  0x69, 0x59, 0x58, 0x99, 0x99, 0x88, 0x00, 0x00, 0x00, 0x00,
-  0xF8, 0xB4, 0x13, 0x51, 0x35, 0x51, 0x51, 0x19, 0x01, 0x00
-};
-
-static const std::vector<uint8_t> YellowLUT 
-{
-  0x02, 0x02, 0x01, 0x11, 0x12, 0x12, 0x22, 0x22, 0x66, 0x69,
-  0x69, 0x59, 0x58, 0x99, 0x99, 0x88, 0x00, 0x00, 0x00, 0x00,
-  0xF8, 0xB4, 0x13, 0x51, 0x35, 0x51, 0x51, 0x19, 0x01, 0x00
-};
-
 Inky::~Inky() {}
 
 class InkyBase : public Inky, public SPIDevice
@@ -133,25 +112,24 @@ protected:
   IndexedColor border_;
   Image buf_;
   IndexedColorMap colorMap_;
+  float ditherAccuracy_;
 
-  InkyBase(DisplayInfo info, int spiSpeedHz); 
+  InkyBase(DisplayInfo info, uint32_t spiSpeedHz = 488000, uint32_t spiTransferSizeBytes = 4096, SPIMode spiMode = SPIMode::SPI_MODE_0); 
 
   virtual void setImage(const Image& image) override;
   virtual void setBorder(IndexedColor color) override;
   virtual const DisplayInfo& info() const override;
 
-  void waitForBusy(int timeoutMs = 5000);
   void sendCommand(InkyCommand command);
-  void sendCommand(InkyCommand command, uint8_t param);
-  void sendCommand(InkyCommand command, const std::vector<uint8_t>& params);
+  template <typename T> void sendCommand(InkyCommand command, const T& data);
+  static void generatePackedIndex(const Image& img, std::vector<uint8_t>& packed);
   static void generatePackedPlane(const Image& img, std::vector<uint8_t>& packed, IndexedColor color);
-  void sendBuffer(const uint8_t* data, int len);
-  void sendBuffer(const std::vector<uint8_t>& data);
-  void sendByte(uint8_t data);
   static void sleep(double milliseconds);
+  Image generateColorTest();
 };
 
-InkyBase::InkyBase(DisplayInfo displayInfo, int spiSpeedHz) : SPIDevice(InkySPIDevice, spiSpeedHz),
+InkyBase::InkyBase(DisplayInfo displayInfo, uint32_t spiSpeedHz, uint32_t spiTransferSizeBytes, SPIMode spiMode) : 
+  SPIDevice(InkySPIDevice, spiSpeedHz, spiTransferSizeBytes, spiMode),
   info_(displayInfo)
 {
   std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> displayColors;
@@ -181,20 +159,31 @@ InkyBase::InkyBase(DisplayInfo displayInfo, int spiSpeedHz) : SPIDevice(InkySPID
       };
       break;
     case ColorCapability::SevenColor:
+    case ColorCapability::SevenColorv2:
       displayColors = 
         {
-          {ColorName::Black, 0, {0,0,0}},
-          {ColorName::White, 1, {255,255,255}},
-          {ColorName::Green, 2, {0,255,0}},
-          {ColorName::Blue, 3, {0,0,255}},
-          {ColorName::Red, 4, {255,0,0}},
-          {ColorName::Yellow, 5, {255,255,0}},
-          {ColorName::Orange, 6, {255,127,0}}
+          {ColorName::Black, 0, {48, 45, 72}},
+          {ColorName::White, 1, {204, 194, 184}},
+          {ColorName::Green, 2, {71, 98, 73}},
+          {ColorName::Blue, 3, {81, 71, 107}},
+          {ColorName::Red, 4, {167, 73, 69}},
+          {ColorName::Yellow, 5, {214, 180, 90}},
+          {ColorName::Orange, 6, {200, 121, 91}},
+
+           //{ColorName::Black, 0, {0,0,0}},
+           //{ColorName::White, 1, {255,255,255}},
+          // {ColorName::Green, 2, {0,255,0}},
+          // {ColorName::Blue, 3, {0,0,255}},
+          // {ColorName::Red, 4, {255,0,0}},
+          // {ColorName::Yellow, 5, {255,255,0}},
+          // {ColorName::Orange, 6, {255,127,0}},
         };
       break;
   }
   colorMap_ = IndexedColorMap(displayColors);
+  //colorMap_.normalizePaletteByLab(false, true);
   border_ = colorMap_.toIndexedColor(ColorName::White);
+  ditherAccuracy_ = 0.75f;
   buf_ = Image(info_.width, info_.height, colorMap_);
 }
 
@@ -210,80 +199,47 @@ void InkyBase::sendCommand(InkyCommand command)
   #endif
 }
 
-void InkyBase::sendCommand(InkyCommand command, uint8_t param)
+template <typename T>
+void InkyBase::sendCommand(InkyCommand command, const T& data)
 {
-  gpioWrite(InkyGpioPin::DC_PIN, 0);
-  #ifdef DEBUG_SPI
-  std::cout << "Command " << command << " ret: " << 
-  #endif
-  writeSPI((uint8_t*)(&command), 1);
-  #ifdef DEBUG_SPI
-  std::cout << std::endl;
-  #endif
-  sendByte(param);
-}
+  sendCommand(command);
 
-void InkyBase::sendCommand(InkyCommand command, const std::vector<uint8_t>& params)
-{
-  gpioWrite(InkyGpioPin::DC_PIN, 0);
-  #ifdef DEBUG_SPI
-  std::cout << "Command " << command << " ret: " << 
-  #endif
-  writeSPI((uint8_t*)(&command), 1);
-  #ifdef DEBUG_SPI
-  std::cout << std::endl;
-  #endif
-  sendBuffer(params);
-}
+  size_t len = 0;
+  const uint8_t* dataPtr = nullptr;
 
-void InkyBase::sendBuffer(const uint8_t* buffer, int len)
-{
+  if constexpr(std::is_same<T, std::initializer_list<uint8_t>>())
+  {
+    len = data.size();
+    dataPtr = std::data(data);
+  }
+  else if constexpr(std::is_same<T, std::vector<uint8_t>>())
+  {
+    len = data.size();
+    dataPtr = data.data();
+  }
+  else if constexpr(std::is_arithmetic<T>())
+  {
+    len = sizeof(T);
+    dataPtr = (uint8_t*)(&data);
+  }
+  else if constexpr(std::is_trivial<T>() && std::is_standard_layout<T>())
+  {
+    len = sizeof(T);
+    dataPtr = (uint8_t*)(&data);
+  }
+  else
+  {
+    static_assert(std::is_trivial<T>() && std::is_standard_layout<T>(), "Unsupported data type!");
+  }
+
   gpioWrite(InkyGpioPin::DC_PIN, 1);
   #ifdef DEBUG_SPI
   std::cout << "Sent buffer len " << len << " ret: " << 
   #endif
-  writeSPI(buffer, len);
+  writeSPI(dataPtr, len);
   #ifdef DEBUG_SPI
   std::cout << std::endl;
   #endif
-}
-
-void InkyBase::sendBuffer(const std::vector<uint8_t>& buffer)
-{
-  gpioWrite(InkyGpioPin::DC_PIN, 1);
-  #ifdef DEBUG_SPI
-  std::cout << "Sent buffer len " << buffer.size() << " ret: " << 
-  #endif
-  writeSPI(buffer);
-  #ifdef DEBUG_SPI
-  std::cout << std::endl;
-  #endif
-}
-
-void InkyBase::sendByte(uint8_t data)
-{
-  gpioWrite(InkyGpioPin::DC_PIN, 1);
-  #ifdef DEBUG_SPI
-  std::cout << "Sent byte ret: " << 
-  #endif
-  writeSPI(&data, 1);
-  #ifdef DEBUG_SPI
-  std::cout << std::endl;
-  #endif
-}
-
-void InkyBase::waitForBusy(int timeoutMs)
-{
-  int i = 0;
-  while (gpioRead(InkyGpioPin::BUSY_PIN) != 0)
-  {
-    sleep(10);
-    ++i;
-    if (i*10 > timeoutMs)
-    {
-      throw std::runtime_error("Timed out while wating for display to finish an operation.");
-    }
-  }
 }
 
 const Inky::DisplayInfo& InkyBase::info() const 
@@ -295,12 +251,24 @@ void InkyBase::setImage(const Image& image)
 {
   buf_ = image;
   buf_.scale(info_.width, info_.height, {ImageScaleMode::Fill});
-  buf_.toIndexed(colorMap_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.75f});
+  buf_.toIndexed(colorMap_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = ditherAccuracy_});
 }
 
 void InkyBase::setBorder(IndexedColor inky)
 {
   border_ = inky;
+}
+
+void InkyBase::generatePackedIndex(const Image& img, std::vector<uint8_t>& packed)
+{
+  // Pack the image buffer so that each value is 4 bytes, 2 pixels per byte
+  // buf = ((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)
+  packed.resize(img.width() * img.height() / 2);
+  const IndexedColor* bufData = (IndexedColor*)img.data();
+  for (int i = 0; i < packed.size(); ++i)
+  {
+    packed[i] = (uint8_t)((bufData[i*2] << 4) | (bufData[i*2+1] & 0x0F));
+  }
 }
 
 void InkyBase::generatePackedPlane(const Image& img, std::vector<uint8_t>& packed, IndexedColor color)
@@ -352,11 +320,25 @@ static inline int64_t millisecondsSinceEpoch()
       .count();
 }
 
+Image InkyBase::generateColorTest()
+{
+  Image colorTest(info_.width, info_.height, colorMap_);
+  auto data = colorTest.data();
+  const auto& indexedColors = colorMap_.indexedColors();
+  int colsPerColor = info_.width / indexedColors.size();
+  for (int i = 0; i < info_.width*info_.height; ++i)
+  {
+    int x = i % info_.width;
+    data[i] = indexedColors[std::clamp(x / colsPerColor, 0, (int)(indexedColors.size()-1))];
+  }
+  return colorTest;
+}
+
 class SimulatedInky : public InkyBase
 {
   public:
   SimulatedInky();
-  virtual void show() override;
+  virtual void show(ShowOperation op) override;
 };
 
 SimulatedInky::SimulatedInky() : InkyBase(
@@ -371,9 +353,18 @@ SimulatedInky::SimulatedInky() : InkyBase(
   }, 0
 ) {}
 
-void SimulatedInky::show()
+void SimulatedInky::show(ShowOperation op)
 {
-  buf_.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+  // Write the images to display RAM
+  if (op == ShowOperation::BufferedImage)
+  {
+    buf_.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+  }
+  else if (op == ShowOperation::ColorTest)
+  {
+    Image colorTest = generateColorTest();
+    colorTest.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+  }
 }
 
 class InkySSD1683 final : public InkyBase
@@ -383,9 +374,10 @@ class InkySSD1683 final : public InkyBase
   std::vector<uint8_t> whitePlane;
   std::vector<uint8_t> colorPlane;
   void reset();
+  void waitForBusy(int timeoutMs = 5000);
   public:
   InkySSD1683(DisplayInfo info);
-  virtual void show() override;
+  virtual void show(ShowOperation op) override;
 };
 
 InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
@@ -396,6 +388,8 @@ InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
   {
     throw std::runtime_error("Unsupported Inky display type!!");
   }
+
+  ditherAccuracy_ = 0.75f;
 
   // Setup the GPIO pins
   if (gpioInitialise() < 0)
@@ -424,65 +418,97 @@ void InkySSD1683::reset()
   waitForBusy();
 }
 
-void InkySSD1683::show()
+void InkySSD1683::waitForBusy(int timeoutMs)
+{
+  int i = 0;
+  while (gpioRead(InkyGpioPin::BUSY_PIN) != 0)
+  {
+    sleep(10);
+    ++i;
+    if (i*10 > timeoutMs)
+    {
+      throw std::runtime_error("Timed out while wating for display to finish an operation.");
+    }
+  }
+}
+
+void InkySSD1683::show(ShowOperation op)
 {
   reset();
 
-  sendCommand(InkyCommand::SSD1683_DRIVER_CONTROL, {(uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8), 0x00});
+  sendCommand(InkyCommand::SSD1683_DRIVER_CONTROL, (uint8_t[]){(uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8), 0x00});
   // Set dummy line period
-  sendCommand(InkyCommand::SSD1683_WRITE_DUMMY, 0x1B);
+  sendCommand(InkyCommand::SSD1683_WRITE_DUMMY, uint8_t{0x1B});
   // Set Line Width
-  sendCommand(InkyCommand::SSD1683_WRITE_GATELINE, 0x0B);
+  sendCommand(InkyCommand::SSD1683_WRITE_GATELINE, uint8_t{0x0B});
   // Data entry squence (scan direction leftward and downward)
-  sendCommand(InkyCommand::SSD1683_DATA_MODE, 0x03);
+  sendCommand(InkyCommand::SSD1683_DATA_MODE, uint8_t{0x03});
   // Set ram X start and end position
-  sendCommand(InkyCommand::SSD1683_SET_RAMXPOS, {0x00, (uint8_t)((info_.width / 8) - 1)});
+  sendCommand(InkyCommand::SSD1683_SET_RAMXPOS, (uint8_t[]){(uint8_t)0x00, (uint8_t)((info_.width / 8) - 1)});
   // Set ram Y start and end position
-  sendCommand(InkyCommand::SSD1683_SET_RAMYPOS, {0x00, 0x00, (uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8)});
+  sendCommand(InkyCommand::SSD1683_SET_RAMYPOS, (uint8_t[]){0x00, 0x00, (uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8)});
   // VCOM Voltage
-  sendCommand(InkyCommand::SSD1683_WRITE_VCOM, 0x70);
+  sendCommand(InkyCommand::SSD1683_WRITE_VCOM, uint8_t{0x70});
   // Write LUT DATA
   // sendCommand(InkyCommand::WRITE_LUT, self._luts[self.lut])
 
   if (border_ == colorMap_.toIndexedColor(ColorName::Black))
   {
-    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000000);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, uint8_t{0b00000000});
     // GS Transition + Waveform 00 + GSA 0 + GSB 0
   }  
   else if (border_ == colorMap_.toIndexedColor(ColorName::Red))
   {
-    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000110);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, uint8_t{0b00000110});
     // GS Transition + Waveform 01 + GSA 1 + GSB 0
   }
   else if (border_ == colorMap_.toIndexedColor(ColorName::Yellow))
   {
-    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00001111);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, uint8_t{0b00001111});
     // GS Transition + Waveform 11 + GSA 1 + GSB 1
   }
   else if (border_ == colorMap_.toIndexedColor(ColorName::White))
   {
-    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, 0b00000001);
+    sendCommand(InkyCommand::SSD1683_WRITE_BORDER, uint8_t{0b00000001});
     // GS Transition + Waveform 00 + GSA 0 + GSB 1
   }
 
   // Set RAM address to 0, 0
-  sendCommand(InkyCommand::SSD1683_SET_RAMXCOUNT, 0x00);
-  sendCommand(InkyCommand::SSD1683_SET_RAMYCOUNT, {0x00, 0x00});
+  sendCommand(InkyCommand::SSD1683_SET_RAMXCOUNT, uint8_t{0x00});
+  sendCommand(InkyCommand::SSD1683_SET_RAMYCOUNT, (uint8_t[2]){0x00, 0x00});
 
   // Write the images to display RAM
-  generatePackedPlane(buf_, whitePlane, colorMap_.toIndexedColor(ColorName::White));
-  sendCommand(InkyCommand::SSD1683_WRITE_RAM, whitePlane);
+  if (op == ShowOperation::BufferedImage)
+  {
+    generatePackedPlane(buf_, whitePlane, colorMap_.toIndexedColor(ColorName::White));
+    
+    if (info_.colorCapability == ColorCapability::BlackWhiteRed)
+    {
+      generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Red));
+    }
+    else if (info_.colorCapability == ColorCapability::BlackWhiteYellow)
+    {
+      generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Yellow));
+      
+    }
+  }
+  else if (op == ShowOperation::ColorTest)
+  {
+    Image colorTest = generateColorTest();
+    generatePackedPlane(colorTest, whitePlane, colorMap_.toIndexedColor(ColorName::White));
 
-  if (info_.colorCapability == ColorCapability::BlackWhiteRed)
-  {
-    generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Red));
-    sendCommand(InkyCommand::SSD1683_WRITE_ALTRAM, colorPlane);
+    if (info_.colorCapability == ColorCapability::BlackWhiteRed)
+    {
+      generatePackedPlane(colorTest, colorPlane, colorMap_.toIndexedColor(ColorName::Red));
+    }
+    else if (info_.colorCapability == ColorCapability::BlackWhiteYellow)
+    {
+      generatePackedPlane(colorTest, colorPlane, colorMap_.toIndexedColor(ColorName::Yellow));
+    }
   }
-  else if (info_.colorCapability == ColorCapability::BlackWhiteYellow)
-  {
-    generatePackedPlane(buf_, colorPlane, colorMap_.toIndexedColor(ColorName::Yellow));
-    sendCommand(InkyCommand::SSD1683_WRITE_ALTRAM, colorPlane);
-  }
+  
+  sendCommand(InkyCommand::SSD1683_WRITE_RAM, whitePlane);
+  sendCommand(InkyCommand::SSD1683_WRITE_ALTRAM, colorPlane);
 
   waitForBusy();
   sendCommand(InkyCommand::SSD1683_MASTER_ACTIVATE);
@@ -490,31 +516,211 @@ void InkySSD1683::show()
 
 class InkyUC8159 final : public InkyBase
 {
-  private: 
-
-
-
-  static const int SPIDeviceSpeedHz = 3000000;
+  private:
+  struct CorrectionData
+  {
+    int cols = 0;
+    int rows = 0;
+    uint8_t rotation = 0;
+    uint8_t offsetX = 0;
+    uint8_t offsetY = 0;
+    uint8_t resolutionSetting = 0;
+  };
+  static const uint32_t DefaultSPIDeviceSpeedHz = 3000000;
+  static const uint32_t DefaultSPITransferSize = 4096;
+  static const SPIMode DefaultSPIMode = SPIMode::SPI_MODE_0; //SPIMode::SPI_NO_CS;
+  CorrectionData correctionData;
   std::vector<uint8_t> packed;
   void reset();
+  void waitForBusy(int timeoutMs = 40000);
   public:
   InkyUC8159(DisplayInfo info);
-  virtual void show() override;
+  virtual void show(ShowOperation op) override;
 };
 
-InkyUC8159::InkyUC8159(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
+InkyUC8159::InkyUC8159(DisplayInfo info) : InkyBase(info, DefaultSPIDeviceSpeedHz, DefaultSPITransferSize, DefaultSPIMode)
 {
+  // Detect the display type, make sure it's supported, and set some correction data
+  switch (info.displayVariant)
+  {
+    case DisplayVariant::Seven_Colour_UC8159:
+      correctionData = 
+      { 
+        .cols = 600,
+        .rows = 448,
+        .resolutionSetting = 0b11000000,
+      };
+    break;
+    case DisplayVariant::Seven_Colour_640x400_UC8159:
+    case DisplayVariant::Seven_Colour_640x400_UC8159_v2:
+      correctionData = 
+      { 
+        .cols = 640,
+        .rows = 400,
+        .resolutionSetting = 0b10000000,
+      };
+    break;
+    default:
+      throw std::runtime_error("Unsupported Inky display type!!");
+  }
 
+  // Correct the eeprom and buffer sizes
+  info_.width = correctionData.cols;
+  info_.height = correctionData.rows;
+  buf_ = Image(info_.width, info_.height, colorMap_);
+  ditherAccuracy_ = 0.7f;
+
+  // Setup the GPIO pins
+  if (gpioInitialise() < 0)
+  {
+      throw std::runtime_error("Failed to setup GPIO\n");
+  }
+
+  //gpioSetMode(InkyGpioPin::CS0_PIN, PI_OUTPUT);
+  //gpioWrite(InkyGpioPin::CS0_PIN, 1);
+
+  gpioSetMode(InkyGpioPin::DC_PIN, PI_OUTPUT);
+  gpioSetPullUpDown(InkyGpioPin::DC_PIN, PI_PUD_OFF);
+  gpioWrite(InkyGpioPin::DC_PIN, 0);
+
+  gpioSetMode(InkyGpioPin::RESET_PIN, PI_OUTPUT);
+  gpioSetPullUpDown(InkyGpioPin::RESET_PIN, PI_PUD_OFF);
+  gpioWrite(InkyGpioPin::RESET_PIN, 1);
+
+  gpioSetMode(InkyGpioPin::BUSY_PIN, PI_INPUT);
+  gpioSetPullUpDown(InkyGpioPin::BUSY_PIN, PI_PUD_OFF);
 }
 
 void InkyUC8159::reset()
 {
+    gpioWrite(InkyGpioPin::RESET_PIN, 0);
+    sleep(100);
+    gpioWrite(InkyGpioPin::RESET_PIN, 1);
 
+    waitForBusy(1000);
+
+    // Resolution Setting
+    // 10bit horizontal followed by a 10bit vertical resolution
+    sendCommand(InkyCommand::UC8159_TRES, (uint16_t[]){info_.width, info_.height} );
+
+    // Panel Setting
+    // 0b11000000 = Resolution select, 0b00 = 640x480, our panel is 0b11 = 600x448
+    // 0b00100000 = LUT selection, 0 = ext flash, 1 = registers, we use ext flash
+    // 0b00010000 = Ignore
+    // 0b00001000 = Gate scan direction, 0 = down, 1 = up (default)
+    // 0b00000100 = Source shift direction, 0 = left, 1 = right (default)
+    // 0b00000010 = DC-DC converter, 0 = off, 1 = on
+    // 0b00000001 = Soft reset, 0 = Reset, 1 = Normal (Default)
+    // 0b11 = 600x448
+    // 0b10 = 640x400
+    sendCommand(InkyCommand::UC8159_PSR, (uint8_t[])
+    {
+        (uint8_t)(correctionData.resolutionSetting | 0b00101111),  // See above for more magic numbers
+        0x08                                                       // display_colours == UC8159_7C
+    });
+
+    // Power Settings
+    sendCommand(InkyCommand::UC8159_PWR, (uint8_t[])
+    {
+        (0x06 << 3) |  // ??? - not documented in UC8159 datasheet  # noqa: W504
+        (0x01 << 2) |  // SOURCE_INTERNAL_DC_DC                     # noqa: W504
+        (0x01 << 1) |  // GATE_INTERNAL_DC_DC                       # noqa: W504
+        (0x01),        // LV_SOURCE_INTERNAL_DC_DC
+        0x00,          // VGx_20V
+        0x23,          // UC8159_7C
+        0x23           // UC8159_7C
+    });
+
+    // Set the PLL clock frequency to 50Hz
+    // 0b11000000 = Ignore
+    // 0b00111000 = M
+    // 0b00000111 = N
+    // PLL = 2MHz * (M / N)
+    // PLL = 2MHz * (7 / 4)
+    // PLL = 2,800,000 ???
+    sendCommand(InkyCommand::UC8159_PLL, (uint8_t)0x3C);  // 0b00111100
+
+    // Send the TSE register to the display
+    sendCommand(InkyCommand::UC8159_TSE, (uint8_t)0x00);  // Colour
+
+    // VCOM and Data Interval setting
+    // 0b11100000 = Vborder control (0b001 = LUTB voltage)
+    // 0b00010000 = Data polarity
+    // 0b00001111 = Vcom and data interval (0b0111 = 10, default)
+    sendCommand(InkyCommand::UC8159_CDI, (uint8_t)((border_ << 5) | 0x17));  // 0b00110111
+
+    // Gate/Source non-overlap period
+    // 0b11110000 = Source to Gate (0b0010 = 12nS, default)
+    // 0b00001111 = Gate to Source
+    sendCommand(InkyCommand::UC8159_TCON, (uint8_t)0x22);  // 0b00100010
+
+    // Disable external flash
+    sendCommand(InkyCommand::UC8159_DAM, (uint8_t)0x00);
+
+    // UC8159_7C
+    sendCommand(InkyCommand::UC8159_PWS, (uint8_t)0xAA);
+
+    // Power off sequence
+    // 0b00110000 = power off sequence of VDH and VDL, 0b00 = 1 frame (default)
+    // All other bits ignored?
+    sendCommand(InkyCommand::UC8159_PFS, (uint8_t)0x00);  // PFS_1_FRAME
 }
 
-void InkyUC8159::show()
+void InkyUC8159::waitForBusy(int timeoutMs)
 {
-  
+  // If the busy_pin is *high* (pulled up by host)
+  // then assume we're not getting a signal from inky
+  // and wait the timeout period to be safe.
+  if (gpioRead(InkyGpioPin::BUSY_PIN) == 1)
+  {
+    sleep(timeoutMs);
+    return;
+  }
+
+  int i = 0;
+  while (gpioRead(InkyGpioPin::BUSY_PIN) == 0)
+  {
+    sleep(10);
+    ++i;
+    if (i*10 > timeoutMs)
+    {
+      throw std::runtime_error("Timed out while wating for display to finish an operation.");
+    }
+  }
+}
+
+void InkyUC8159::show(ShowOperation op)
+{
+  if (op == ShowOperation::BufferedImage)
+  {
+    generatePackedIndex(buf_, packed);
+  }
+  else if (op == ShowOperation::ColorTest)
+  {
+    generatePackedIndex(generateColorTest(), packed);
+  }
+  else if (op == ShowOperation::CleanDisplay)
+  {
+    Image cleanImage(info_.width, info_.height, colorMap_);
+    for (int i=0; i < info_.width*info_.height; ++i)
+    {
+      cleanImage.data()[i] = (uint8_t)7;
+    }
+    generatePackedIndex(cleanImage, packed);
+  }
+
+  reset();
+
+  sendCommand(InkyCommand::UC8159_DTM1, packed);
+
+  sendCommand(InkyCommand::UC8159_PON);
+  waitForBusy(200);
+
+  sendCommand(InkyCommand::UC8159_DRF);
+  waitForBusy(32000);
+
+  sendCommand(InkyCommand::UC8159_POF);
+  waitForBusy(200);
 }
 
 static uint16_t read16(const uint8_t* buf)
@@ -564,10 +770,10 @@ std::unique_ptr<Inky> Inky::Create()
     case DisplayVariant::Red_wHAT_SSD1683:
     case DisplayVariant::Yellow_wHAT_SSD1683:
       return std::make_unique<InkySSD1683>(displayInfo);
-    // case DisplayVariant::Seven_Colour_UC8159:
-    // case DisplayVariant::Seven_Colour_640x400_UC8159:
-    // case DisplayVariant::Seven_Colour_640x400_UC8159_v2:
-    //   return std::make_unique<InkyUC8159>(displayInfo);
+    case DisplayVariant::Seven_Colour_UC8159:
+    case DisplayVariant::Seven_Colour_640x400_UC8159:
+    case DisplayVariant::Seven_Colour_640x400_UC8159_v2:
+      return std::make_unique<InkyUC8159>(displayInfo);
   }
   throw std::runtime_error("The connected Inky is unsupported!");
   #endif

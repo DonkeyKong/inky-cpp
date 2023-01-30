@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Windows SysGCC RPi Cross-Compile",
+        "cmakeSettings": {
+            "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/windows-sysgcc-cross.cmake"
+        },
+        "compilers": {
+            "C": "C:\\SysGCC\\raspberry\\bin\\arm-linux-gnueabihf-gcc.exe",
+            "CXX": "C:\\SysGCC\\raspberry\\bin\\arm-linux-gnueabihf-g++.exe",
+        }
+    }
+]

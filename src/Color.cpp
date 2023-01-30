@@ -27,6 +27,58 @@ IndexedColorMap::IndexedColorMap(std::vector<std::tuple<ColorName,IndexedColor,R
   }
 }
 
+template <typename T>
+static T remap(T value, T inMin, T inMax, T outMin, T outMax)
+{
+  double t = (double)(value - inMin)/(double)(inMax-inMin);
+  double out = t * (double)(outMax-outMin) + (double)(outMin);
+  return std::clamp((T)std::clamp(out, (double)outMin, (double)outMax), outMin, outMax);
+}
+
+void IndexedColorMap::normalizePaletteByRgb(bool pinBlack, bool pinWhite)
+{
+  auto max = pinWhite ? toRGBAColor(toIndexedColor(ColorName::White)).getBrightestChannel() : (uint8_t)255;
+  auto min = pinBlack ? toRGBAColor(toIndexedColor(ColorName::Black)).getDarkestChannel() : (uint8_t)0;
+
+  for (auto index : indexedColors_)
+  {
+    auto name = indexToName[index];
+    RGBAColor colorRgb = indexToRgba[index];
+    colorRgb.R = remap(colorRgb.R, min, max, (uint8_t)0, (uint8_t)255);
+    colorRgb.G = remap(colorRgb.G, min, max, (uint8_t)0, (uint8_t)255);
+    colorRgb.B = remap(colorRgb.B, min, max, (uint8_t)0, (uint8_t)255);
+    LabColor colorLab = colorRgb.toLab();
+
+    // Be sure to update all the following indices
+    // indexToRgba, indexToLab, nameToRgba, nameToLab
+    indexToRgba[index] = colorRgb;
+    nameToRgba[name] = colorRgb;
+    indexToLab[index] = colorLab;
+    nameToLab[name] = colorLab;
+  }
+}
+
+void IndexedColorMap::normalizePaletteByLab(bool pinBlack, bool pinWhite)
+{
+  float max = pinWhite ? toLabColor(toIndexedColor(ColorName::White)).L : 100.0f;
+  float min = pinBlack ? toLabColor(toIndexedColor(ColorName::Black)).L : 0.0f;
+
+  for (auto index : indexedColors_)
+  {
+    auto name = indexToName[index];
+    LabColor colorLab = indexToLab[index];
+    colorLab.L = remap(colorLab.L, min, max, 0.0f, 100.0f);
+    RGBAColor colorRgb = colorLab.toRgba();
+
+    // Be sure to update all the following indices
+    // indexToRgba, indexToLab, nameToRgba, nameToLab
+    indexToRgba[index] = colorRgb;
+    nameToRgba[name] = colorRgb;
+    indexToLab[index] = colorLab;
+    nameToLab[name] = colorLab;
+  }
+}
+
 const std::vector<IndexedColor>& IndexedColorMap::indexedColors() const 
 {
   return indexedColors_;
@@ -179,10 +231,16 @@ HSVColor RGBAColor::toHSV() const
   return hsv;
 }
 
+uint8_t RGBAColor::getDarkestChannel() const
+{
+  return std::min({R, G, B});
+}
+
 uint8_t RGBAColor::getBrightestChannel() const
 {
-  return std::max(R, std::max(G, B));
+  return std::max({R, G, B});
 }
+
 
 uint8_t RGBAColor::getGrayValue() const
 {
@@ -264,6 +322,13 @@ LabColor RGBAColor::toLab() const
   LabColor lab;
   rgbToLab(*this, lab);
   return lab;
+}
+
+RGBAColor LabColor::toRgba() const
+{
+  RGBAColor rgb;
+  labToRgb(*this, rgb);
+  return rgb;
 }
 
 float LabColor::deltaE(const LabColor& other) const

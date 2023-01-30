@@ -42,9 +42,10 @@ int main(int argc, char *argv[])
   auto qrCode = QRCode::GenerateImage(configURL);
   qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ImageScaleMode::Fit, .interpolationMode = ImageInterpolationMode::Nearest});
   qrCode.crop(0, 0, display->info().width, display->info().height);
-  Text::Draw(configURL, qrCode, 200, 250, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-  Text::Draw("Scan the QR code to upload a new photo.", qrCode, 200, 270, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+  Text::Draw(configURL, qrCode, display->info().width / 2, display->info().height-50, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+  Text::Draw("Scan the QR code to upload a new photo.", qrCode, display->info().width / 2, display->info().height-30, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
   display->setImage(qrCode);
+  //display->show(Inky::ShowOperation::CleanDisplay);
   display->show();
   
   http.Server().Post("/post_photo",
