@@ -39,8 +39,10 @@ option(PNG_SHARED OFF)
 option(PNG_TESTS OFF)
 option(PNG_EXECUTABLES OFF)
 add_subdirectory("libpng")
-# target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/deps/libpng
-#                                                           ${CMAKE_CURRENT_BINARY_DIR}/deps/libpng)
+add_library(libpng INTERFACE)
+target_link_libraries(libpng INTERFACE png_static)
+target_include_directories(libpng INTERFACE ${PROJECT_SOURCE_DIR}/deps/libpng
+                                            ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # Magic Enum
 add_library(magic_enum INTERFACE)

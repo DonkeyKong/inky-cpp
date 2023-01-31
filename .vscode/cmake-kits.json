@@ -8,5 +8,15 @@
             "C": "C:\\SysGCC\\raspberry\\bin\\arm-linux-gnueabihf-gcc.exe",
             "CXX": "C:\\SysGCC\\raspberry\\bin\\arm-linux-gnueabihf-g++.exe",
         }
-    }
+    },
+    {
+      "name": "macOS clang RPi Cross-Compile",
+      "cmakeSettings": {
+          "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/clang-cross.cmake"
+      },
+      "compilers": {
+        "C": "/usr/bin/clang",
+        "CXX": "/usr/bin/clang++",
+      }
+  }
 ]

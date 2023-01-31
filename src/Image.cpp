@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
 #include <stdarg.h>
 #include <cmath>
 #include <fstream>
@@ -325,9 +326,10 @@ Image Image::FromBuffer(const uint8_t* imageBuf, size_t len)
 
 void Image::readJpegFromFile(const std::string& filename)
 {
-  std::basic_ifstream<uint8_t> file(filename, std::ios::binary);
-  std::vector<uint8_t> compressedImage((std::istreambuf_iterator<uint8_t>(file)), std::istreambuf_iterator<uint8_t>());
-  readJpegFromBuffer(compressedImage);
+  std::ifstream file(filename, std::ios::binary);
+  std::vector<char> compressedImage;
+  compressedImage.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  readJpegFromBuffer((uint8_t*)compressedImage.data(), compressedImage.size());
 }
 
 void Image::readJpegFromBuffer(const std::vector<uint8_t>& compressedImage)
@@ -381,8 +383,8 @@ void Image::writeJpegToFile(const std::string& filename, int quality) const
   // Save the buffer to a file
   try
   {
-    std::basic_ofstream<uint8_t> file(filename, std::ios::binary | std::ios::trunc);
-    file.write(compressedImage, jpegSize);
+    std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+    file.write((char*)compressedImage, jpegSize);
     file.close();
   }
   catch (...)

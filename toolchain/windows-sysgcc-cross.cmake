@@ -2,6 +2,9 @@
 # GNU Toolchains Raspberry Pi cross compile setup to build
 # RPi binaries painlessly under native Windows
 # Download the toolchain here: https://gnutoolchains.com/raspberry/
+#
+# If it's not installed at C:\SysGCC, then change the paths here and in
+# .vscode/cmake-kits.json
 
 # the name of the target operating system
 set(CMAKE_SYSTEM_NAME "Linux")

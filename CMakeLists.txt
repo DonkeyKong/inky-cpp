@@ -31,7 +31,7 @@ target_link_libraries(${PROJECT_NAME} httplib
                                       fmt 
                                       json 
                                       libjpeg
-                                      png_static
+                                      libpng
                                       magic_enum
                                       qr_code
                                       image_resampler
