@@ -1,8 +1,8 @@
 [
     {
-        "name": "Windows SysGCC RPi Cross-Compile",
+        "name": "Windows RPi Cross-Compile",
         "cmakeSettings": {
-            "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/windows-sysgcc-cross.cmake"
+            "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/windows-cross.cmake"
         },
         "compilers": {
             "C": "C:\\SysGCC\\raspberry\\bin\\arm-linux-gnueabihf-gcc.exe",
@@ -10,13 +10,23 @@
         }
     },
     {
-      "name": "macOS clang RPi Cross-Compile",
+      "name": "Docker RPi Cross-Compile",
       "cmakeSettings": {
-          "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/clang-cross.cmake"
+          "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/docker-cross.cmake"
       },
       "compilers": {
-        "C": "/usr/bin/clang",
-        "CXX": "/usr/bin/clang++",
+        "C": "/usr/bin/arm-linux-gnueabihf-gcc",
+        "CXX": "/usr/bin/arm-linux-gnueabihf-g++",
       }
+  },
+  {
+    "name": "Docker RPi Zero Cross-Compile",
+    "cmakeSettings": {
+        "CMAKE_TOOLCHAIN_FILE" : "${workspaceFolder}/toolchain/docker-cross-zero.cmake"
+    },
+    "compilers": {
+      "C": "${workspaceFolder}/toolchain/x-tools/armv6-rpi-linux-gnueabihf/bin/armv6-rpi-linux-gnueabihf-gcc",
+      "CXX": "${workspaceFolder}/toolchain/x-tools/armv6-rpi-linux-gnueabihf/bin/armv6-rpi-linux-gnueabihf-g++",
+    }
   }
 ]

@@ -3,3 +3,7 @@ build
 inky-py
 .vscode/settings.json
 ._*
+toolchain/sysroot.img
+toolchain/sysroot.img.xz
+toolchain/x-tools
+toolchain/x-tools.tar.xz
