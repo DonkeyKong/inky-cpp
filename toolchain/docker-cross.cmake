@@ -1,10 +1,9 @@
 # This toolchain file allows a debian slim docker to painlessly
 # build RPi binaries.
 # You'll need the following packages installed:
-#   cmake, ninja-build
+#   cmake ninja-build fdisk xz-utils
 # You'll also need a Raspberry Pi sysroot at /mnt/sysroot 
-# Check out get_sysroot.sh to see how you might get that
-# going.
+# devcontainer.json and Dockerfile together should do all this for you automatically
 
 # Select your minimum Raspberry Pi version
 set(RASPBERRY_VERSION 1)  # 1 = Raspberry PI 1 B+ Zero

@@ -14,5 +14,6 @@
 
 	// This doesn't seem to actually work, and the command needs to be run manually for some reason...
   // At least you only have to do it once.
-	"postCreateCommand": "cd /workspaces/inky-cpp/toolchain && ./setup_docker_toolchain.sh"
+	"postCreateCommand": "cd /workspaces/inky-cpp/toolchain && ./setup_docker_toolchain.sh",
+  "remoteUser": "root"
 }
