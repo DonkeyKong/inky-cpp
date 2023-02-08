@@ -3,44 +3,23 @@
 # The URL and SHA of the RPI image you're looking to download
 # Get URL and SHA at https://www.raspberrypi.com/software/operating-systems/
 RPI_IMAGE_URL=https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2022-09-26/2022-09-22-raspios-bullseye-armhf-lite.img.xz
-RPI_IMAGE_DEST=/mnt/toolchain/sysroot
+RPI_IMAGE_DEST=sysroot
 RPI_IMAGE_DEV=/dev/loop0
 RPI_IMAGE_MNT=/mnt/sysroot
-
-# Targeting the Raspberry Pi 1 and Zero are tricky!
-# This is because stock GCC does not support their CPU, pretty annoying
-# We will fetch a 3rd party prebuilt toolchain just for these platforms
-# and use stock GCC for the others
-XTOOLS_URL=https://github.com/tttapa/docker-arm-cross-toolchain/releases/download/0.0.9/x-tools-armv6-rpi-linux-gnueabihf.tar.xz
-XTOOLS_DEST=/mnt/toolchain/x-tools
 
 # Attempt an unmount 
 echo "Cleaning up previous sysroot (ok if this fails)..."
 umount $RPI_IMAGE_MNT
 losetup -d $RPI_IMAGE_DEV
 
-# This seems to fail because of docker permissions issues!
-# Just setup manually at toolchain/x-tools for now...
-
-# echo "Setting up Pi 1+Zero compiler..."
-# if [ ! -d "$XTOOLS_DEST" ] ; then
-#   echo "Downloading..."
-#   curl -L $XTOOLS_URL > "$XTOOLS_DEST.tar.xz"
-#   echo "Extracting..."
-#   mkdir "$XTOOLS_DEST"
-#   tar -C /mnt/toolchain -xf "$XTOOLS_DEST.tar.xz" 
-# else
-#   echo "Already setup!"
-# fi
-
-echo "Setting up RPi sysroot..."
-if [ ! -f "$RPI_IMAGE_DEST.img" ] ; then
+echo "Fetching RPi image..."
+if [ -f "$RPI_IMAGE_DEST.img" ] ; then
+  echo "Already setup!"
+else
   echo "Downloading..."
-  curl $RPI_IMAGE_URL > "$RPI_IMAGE_DEST.img.xz"
+  curl "$RPI_IMAGE_URL" > "$RPI_IMAGE_DEST.img.xz"
   echo "Extracting..."
   xz -d "$RPI_IMAGE_DEST.img.xz"
-else
-  echo "Already setup!"
 fi
 
 # Get the second partition offset and size in the disk
@@ -55,7 +34,24 @@ mknod $RPI_IMAGE_DEV b 7 0
 
 echo "Mounting $RPI_IMAGE_DEST.img at $RPI_IMAGE_MNT"
 if [ ! -d "$RPI_IMAGE_MNT" ] ; then
-  mkdir "$RPI_IMAGE_MNT"
+  mkdir -p "$RPI_IMAGE_MNT"
 fi
 losetup -o $IMG_BYTE_OFFSET --sizelimit $IMG_BYTE_SIZE --sector-size $IMG_SECT_SIZE $RPI_IMAGE_DEV $RPI_IMAGE_DEST.img
+
+# Mount image read/write and fix some symlinks
+echo "Fixing symlinks in sysroot..."
+mount $RPI_IMAGE_DEV $RPI_IMAGE_MNT
+cd $RPI_IMAGE_MNT/lib/arm-linux-gnueabihf
+rm libpthread.so
+ln -s libpthread.so.0 libpthread.so
+cd $RPI_IMAGE_MNT/usr/lib/arm-linux-gnueabihf
+rm libpthread.so
+ln -s ../../lib/arm-linux-gnueabihf/libpthread.so.0 libpthread.so
+cd /
+
+# Remount read-only
+echo "Mounting sysroot..."
+umount $RPI_IMAGE_MNT
 mount -r $RPI_IMAGE_DEV $RPI_IMAGE_MNT
+
+echo "Done!!"

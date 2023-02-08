@@ -1,11 +1,5 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-dockerfile
-
-// docker run -i -t 
-//  --cap-add=CAP_MKNOD --cap-add SYS_ADMIN --device-cgroup-rule="b 7:* rmw" 
-//  --mount type=bind,source="$(pwd)/toolchain",target=/mnt/toolchain 
-//  rpi-cross:v2
-
 {
 	"name": "Raspberry Pi Cross Dockerfile",
 	"build": {
@@ -14,24 +8,11 @@
 		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
 		"dockerfile": "../Dockerfile"
 	},
-  "mounts": [
-    "source=${localWorkspaceFolder}/toolchain,target=/mnt/toolchain,type=bind,consistency=cached"
-  ],
   "capAdd": ["CAP_MKNOD","SYS_ADMIN"],
   "runArgs": ["--device-cgroup-rule=b 7:* rmw"],
+  "customizations": {"vscode": {"extensions": ["ms-vscode.vscode-cpptools","ms-vscode.cpptools-extension-pack", "ms-vscode.vscode-cmake-tools"]}},
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-
-	// Uncomment the next line to run commands after the container is created.
-	"postCreateCommand": "/mnt/toolchain/setup_docker_toolchain.sh"
-
-	// Configure tool-specific properties.
-	// "customizations": {},
-
-	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "devcontainer"
+	// This doesn't seem to actually work, and the command needs to be run manually for some reason...
+  // At least you only have to do it once.
+	"postCreateCommand": "cd /workspaces/inky-cpp/toolchain && ./setup_docker_toolchain.sh"
 }

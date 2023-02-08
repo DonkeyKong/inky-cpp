@@ -22,11 +22,6 @@ add_executable( ${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 
-# Link the c++ filesystem API and pthreads under GCC
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_link_libraries(${PROJECT_NAME} stdc++fs pthread)
-endif()
-
 target_link_libraries(${PROJECT_NAME} httplib 
                                       fmt 
                                       json 
@@ -36,6 +31,11 @@ target_link_libraries(${PROJECT_NAME} httplib
                                       qr_code
                                       image_resampler
                                       broadcom_host)
+
+# Link the c++ filesystem API and pthreads under GCC
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_link_libraries(${PROJECT_NAME} stdc++fs pthread)
+endif()
 
 add_custom_target(copy_resources ALL)
 
