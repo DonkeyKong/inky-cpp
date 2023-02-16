@@ -94,12 +94,12 @@ static const uint8_t ditherLut[]
 
 static void checkDitherSrcDest(const Image& sourceImage, Image& destImage)
 {
-  if (sourceImage.format() != ImageFormat::RGBA)
+  if (sourceImage.format() != PixelFormat::RGBA)
   {
     throw std::invalid_argument("Source image format must be RGBA");
   }
 
-  if (destImage.format() != ImageFormat::IndexedColor)
+  if (destImage.format() != PixelFormat::IndexedColor)
   {
     throw std::invalid_argument("Dest image format must be an Indexed format!");
   }
@@ -143,14 +143,14 @@ void patternDither(const Image& sourceImage, Image& destImage)
   }
 }
 
-static std::vector<LabColor> getLabVector(const Image& sourceImage, ImageFormat destFormat)
+static std::vector<LabColor> getLabVector(const Image& sourceImage, PixelFormat destFormat)
 {
-  if (sourceImage.format() != ImageFormat::RGBA)
+  if (sourceImage.format() != PixelFormat::RGBA)
   {
     throw std::invalid_argument("Source image format must be RGBA");
   }
 
-  if (destFormat != ImageFormat::IndexedColor)
+  if (destFormat != PixelFormat::IndexedColor)
   {
     throw std::invalid_argument("Dest image format must be an indexed format!");
   }
@@ -316,7 +316,7 @@ void diffusionDither(const Image& sourceImage, Image& destImage, float ditherAcc
 
   int width = sourceImage.width();
   int height = sourceImage.height();
-  ImageFormat format = destImage.format();
+  PixelFormat format = destImage.format();
   
   // Get the source image data in LAB color format
   std::vector<LabColor> labVals = getLabVector(sourceImage, destImage.format());

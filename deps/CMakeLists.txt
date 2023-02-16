@@ -56,6 +56,11 @@ target_include_directories(qr_code SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/QR-
 add_library(image_resampler INTERFACE)
 target_include_directories(image_resampler SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/single-header-image-resampler)
 
+# TinyEXIF
+add_library(TinyEXIF ${CMAKE_CURRENT_SOURCE_DIR}/TinyEXIF/TinyEXIF.cpp)
+target_compile_definitions(TinyEXIF PUBLIC "TINYEXIF_NO_XMP_SUPPORT")
+target_include_directories(TinyEXIF SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/TinyEXIF)
+
 # Broadcom Host
 add_library(broadcom_host INTERFACE) 
 find_file(BCM_HOST_PATH NAMES "bcm_host.h")

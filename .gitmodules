@@ -30,3 +30,6 @@
 	path = deps/json
 	url = https://github.com/nlohmann/json.git
 	shallow = true
+[submodule "deps/TinyEXIF"]
+	path = deps/TinyEXIF
+	url = https://github.com/cdcseacave/TinyEXIF.git

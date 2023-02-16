@@ -1,6 +1,7 @@
 #include "Inky.hpp"
 #include "HttpService.hpp"
 #include "Image.hpp"
+#include "ImageIO.hpp"
 #include "Text.hpp"
 #include "QRCode.hpp"
 #include <magic_enum.hpp>
@@ -40,7 +41,7 @@ int main(int argc, char *argv[])
   // Get the URL to show from the HttpService
   std::string configURL = fmt::format("http://{}", http.ListeningInterface());
   auto qrCode = QRCode::GenerateImage(configURL);
-  qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ImageScaleMode::Fit, .interpolationMode = ImageInterpolationMode::Nearest});
+  qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ScaleMode::Fit, .interpolationMode = InterpolationMode::Nearest});
   qrCode.crop(0, 0, display->info().width, display->info().height);
   Text::Draw(configURL, qrCode, display->info().width / 2, display->info().height-50, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
   Text::Draw("Scan the QR code to upload a new photo.", qrCode, display->info().width / 2, display->info().height-30, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
@@ -48,6 +49,14 @@ int main(int argc, char *argv[])
   //display->show(Inky::ShowOperation::CleanDisplay);
   display->show();
   
+  http.Server().Get("/current_photo.png",
+  [&](const Request &req, Response &res) 
+  {
+    std::string imgBuf;
+    ImageIO::SaveToBuffer(display->getImage(), imgBuf, {.saveFormat = ImageFormat::PNG});
+    res.set_content(imgBuf, "image/png");
+  });
+
   http.Server().Post("/post_photo",
   [&](const Request &req, Response &res) 
   {
@@ -62,11 +71,11 @@ int main(int argc, char *argv[])
                       << " | Content Type: " << data.content_type
                       << " | Content Size: " << data.content.size()
                       << std::endl;
-            if (data.content_type == "image/jpeg")
+            if (data.content_type.find("image/") == 0)
             {
-                std::cout << "Image appears to be a jpg, sending to display..." << std::endl;
-                Image newImage = Image::FromBuffer(data.content);
-                newImage.scale(display->info().width, display->info().height, {.scaleMode = ImageScaleMode::Fill});
+                std::cout << "Image appears to be an image, sending to display..." << std::endl;
+                Image newImage = ImageIO::LoadFromBuffer(data.content);
+                newImage.scale(display->info().width, display->info().height, {.scaleMode = ScaleMode::Fill});
                 display->setImage(newImage);
                 display->show();
                 break;

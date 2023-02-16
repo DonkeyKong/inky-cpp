@@ -8,20 +8,23 @@
 #include <string>
 #include <memory>
 
-enum class ImageFormat : int
+// All of the below enums and settings structs should be inside
+// the Image class but cannot due to a gcc and clang bug
+
+enum class PixelFormat : int
 {
   RGBA = 0,
   IndexedColor = 1
 };
 
-enum class ImageScaleMode
+enum class ScaleMode
 {
   Stretch,
   Fit,
   Fill
 };
 
-enum class ImageInterpolationMode
+enum class InterpolationMode
 {
   Auto = -1,
   Nearest  = (int) base::KernelTypeNearest,
@@ -46,7 +49,7 @@ enum class DitherMode
   Pattern // Uses classic 17 pattern swatches
 };
 
-struct ImageDitherSettings
+struct DitherSettings
 {
   // When converting from RGBA to an Inky image mode, this dithering mode will be used.
   DitherMode ditherMode = DitherMode::Diffusion;
@@ -56,15 +59,30 @@ struct ImageDitherSettings
   float ditherAccuracy = 1.0f;
 };
 
-struct ImageScaleSettings
+// Operations that flip and rotate the image
+// NOTE: these correspond 1:1 with the exif orientation values
+// but the names describe the forward transform rather than the inverse
+enum class FlipRotateOperation : uint8_t
+{
+  None = 1,
+  Mirror = 2,
+  Rotate180 = 3,
+  Rotate180Mirror = 4,
+  Rotate90Mirror = 5, 
+  Rotate90 = 6, 
+  Rotate270Mirror = 7,
+  Rotate270 = 8
+};
+
+struct ScaleSettings
 {
   // Determines aspect and scale of image resizing
   // "Stretch" changes the source image aspect ratio to match the destination image
   // "Fill" maintains the source image aspect ratio and scales it large enough to fill all destination pixels
   // "Fit" maintains the source image aspect ratio and scales it to fit inside the destination image
-  ImageScaleMode scaleMode = ImageScaleMode::Stretch;
+  ScaleMode scaleMode = ScaleMode::Stretch;
 
-  ImageInterpolationMode interpolationMode = ImageInterpolationMode::Auto;
+  InterpolationMode interpolationMode = InterpolationMode::Auto;
 
   // When scaling or cropping, this determines what color fills in the background if not all destination pixels are covered
   RGBAColor backgroundColor {255, 255, 255, 255};
@@ -95,7 +113,7 @@ public:
     int height() const;
 
     // Get the image format
-    ImageFormat format() const;
+    PixelFormat format() const;
 
     const IndexedColorMap& colorMap() const;
 
@@ -107,52 +125,31 @@ public:
 
     // Convert an image to indexed format. Specify a destination image for the conversion
     // or leave dest as nullptr to perform an in-place conversion.
-    void toIndexed(IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings());
-    void toIndexed(Image& dest, IndexedColorMap colorMap, ImageDitherSettings settings = ImageDitherSettings()) const;
+    void toIndexed(IndexedColorMap colorMap, DitherSettings settings = DitherSettings());
+    void toIndexed(Image& dest, IndexedColorMap colorMap, DitherSettings settings = DitherSettings()) const;
 
     // Convert an image to RGBA format
     void toRGBA();
     void toRGBA(Image& dest) const;
 
+    // Rotate and/or flip the image
+    void rotateFlip(FlipRotateOperation op);
+    void rotateFlip(Image& dest, FlipRotateOperation op) const;
+
     // Scale the image to the specified size. Specify a destination image for the operation
     // or leave dest as nullptr to perform the operation in-place.
-    void scale(int width, int height, ImageScaleSettings settings = ImageScaleSettings(), Image* dest = nullptr);
+    void scale(int width, int height, ScaleSettings settings = {});
+    void scale(Image& dest, int width, int height, ScaleSettings settings = {}) const;
 
     // Crop the image to the specified size rectangle. 
     // "Out of bounds" x, y, width, and height are ok, and will infill with a background color.
     // Specify a destination image for the operation or leave dest as nullptr to perform the operation in-place.
-    void crop(int x, int y, int width, int height, ImageScaleSettings settings = ImageScaleSettings(), Image* dest = nullptr);
-
-    // Read a PNG image from disk. Will change format to RGBA and reset dimensions.
-    void readPngFromFile(const std::string& imagePath);
-
-    // Write a PNG image to disk.
-    void writePngToFile(const std::string& imagePath) const;
-
-    // Read a JPG image from a file. Will change format to RGBA and reset dimensions.
-    void readJpegFromFile(const std::string& filename);
-
-    // Read a JPG image from buffer. Will change format to RGBA and reset dimensions.
-    void readJpegFromBuffer(const std::vector<uint8_t>& buffer);
-    void readJpegFromBuffer(const std::string& buffer);
-    void readJpegFromBuffer(const uint8_t* buffer, size_t len);
-
-    // Write a JPG image to disk.
-    void writeJpegToFile(const std::string& filename, int quality = 75) const;
-
-    // Write a JPG image to a memory buffer
-    std::vector<uint8_t> writeJpegToBuffer(int quality = 75) const;
-
-    // Open a file from disk and construct an image around it
-    static Image FromFile(const std::string& imagePath);
-
-    // Open a file from disk and construct an image around it
-    static Image FromBuffer(const std::vector<uint8_t>& imageBuf);
-    static Image FromBuffer(const std::string& buffer);
-    static Image FromBuffer(const uint8_t* buffer, size_t len);
+    void crop(int x, int y, int width, int height, ScaleSettings settings = {});
+    void crop(Image& dest, int x, int y, int width, int height, ScaleSettings settings = {}) const;
 private:
+    friend class ImageIO;
     int width_, height_;
-    ImageFormat format_;
+    PixelFormat format_;
     std::vector<uint8_t> data_;
     IndexedColorMap colorMap_;
 };

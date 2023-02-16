@@ -1,6 +1,7 @@
 #include "Text.hpp"
 #include "Dither.hpp"
 #include <unordered_map>
+#include <ImageIO.hpp>
 
 namespace Text
 {
@@ -12,7 +13,7 @@ static Image loadFont(const std::string& path)
         {ColorName::Black, 0, {0,0,0}},
         {ColorName::White, 1, {255,255,255}}
   });
-  Image font = Image::FromFile(path);
+  Image font = ImageIO::LoadFromFile(path);
   // Create a binarized index image of the font
   font.toIndexed(colorMap, {.ditherAccuracy = 0.0f});
   return font;
@@ -75,7 +76,7 @@ void Draw(const std::string& str, Image& dest, int x, int y, TextStyle style)
     x -= (str.size() * charWidth);
   }
 
-  if (dest.format() == ImageFormat::RGBA)
+  if (dest.format() == PixelFormat::RGBA)
   {
     RGBAColor* destData = (RGBAColor*)dest.data();
     BoundingBox destBox = dest.bounds();

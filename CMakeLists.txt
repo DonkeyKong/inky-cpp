@@ -11,6 +11,7 @@ add_executable( ${PROJECT_NAME}
                     src/BoundingBox.cpp
                     src/Color.cpp
                     src/Image.cpp
+                    src/ImageIO.cpp
                     src/Text.cpp
                     src/Dither.cpp
                     src/Inky.cpp
@@ -30,6 +31,7 @@ target_link_libraries(${PROJECT_NAME} httplib
                                       magic_enum
                                       qr_code
                                       image_resampler
+                                      TinyEXIF
                                       broadcom_host)
 
 # Link the c++ filesystem API and pthreads under GCC

@@ -1,6 +1,7 @@
 #include "Inky.hpp"
 #include "I2CDevice.hpp"
 #include "SPIDevice.hpp"
+#include "ImageIO.hpp"
 
 #include <fmt/format.h>
 #include <chrono>
@@ -117,6 +118,7 @@ protected:
   InkyBase(DisplayInfo info, uint32_t spiSpeedHz = 488000, uint32_t spiTransferSizeBytes = 4096, SPIMode spiMode = SPIMode::SPI_MODE_0); 
 
   virtual void setImage(const Image& image) override;
+  virtual Image getImage() const override;
   virtual void setBorder(IndexedColor color) override;
   virtual const DisplayInfo& info() const override;
 
@@ -250,8 +252,13 @@ const Inky::DisplayInfo& InkyBase::info() const
 void InkyBase::setImage(const Image& image)
 {
   buf_ = image;
-  buf_.scale(info_.width, info_.height, {ImageScaleMode::Fill});
+  buf_.scale(info_.width, info_.height, {ScaleMode::Fill});
   buf_.toIndexed(colorMap_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = ditherAccuracy_});
+}
+
+Image InkyBase::getImage() const
+{
+  return buf_;
 }
 
 void InkyBase::setBorder(IndexedColor inky)
@@ -344,11 +351,11 @@ class SimulatedInky : public InkyBase
 SimulatedInky::SimulatedInky() : InkyBase(
   {
     // Some fake data on non-pi platforms
-    .width = 400,
-    .height = 300,
-    .colorCapability = ColorCapability::BlackWhiteRed,
+    .width = 640,
+    .height = 400,
+    .colorCapability = ColorCapability::SevenColor,
     .pcbVariant = 12,
-    .displayVariant = DisplayVariant::Red_wHAT_SSD1683,
+    .displayVariant = DisplayVariant::Seven_Colour_640x400_UC8159,
     .writeTime = "2022-09-02 11:54:06.4"
   }, 0
 ) {}
@@ -358,12 +365,12 @@ void SimulatedInky::show(ShowOperation op)
   // Write the images to display RAM
   if (op == ShowOperation::BufferedImage)
   {
-    buf_.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+    ImageIO::SaveToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()), buf_, {.saveFormat = ImageFormat::PNG});
   }
   else if (op == ShowOperation::ColorTest)
   {
     Image colorTest = generateColorTest();
-    colorTest.writePngToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()));
+    ImageIO::SaveToFile(fmt::format("Inky_{}.png", millisecondsSinceEpoch()), colorTest, {.saveFormat = ImageFormat::PNG});
   }
 }
 
