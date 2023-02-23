@@ -1,5 +1,6 @@
 #include "Inky.hpp"
 #include "HttpService.hpp"
+#include "Gpio.hpp"
 #include "Image.hpp"
 #include "ImageIO.hpp"
 #include "Text.hpp"
@@ -36,19 +37,28 @@ int main(int argc, char *argv[])
   std::cout << "\tDisplay Variant: " << display->info().displayVariant << std::endl;
   std::cout << "\tWrite Time: " << display->info().writeTime << std::endl;
 
+
+
   HttpService http;
 
-  // Get the URL to show from the HttpService
-  std::string configURL = fmt::format("http://{}", http.ListeningInterface());
-  auto qrCode = QRCode::GenerateImage(configURL);
-  qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ScaleMode::Fit, .interpolationMode = InterpolationMode::Nearest});
-  qrCode.crop(0, 0, display->info().width, display->info().height);
-  Text::Draw(configURL, qrCode, display->info().width / 2, display->info().height-50, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-  Text::Draw("Scan the QR code to upload a new photo.", qrCode, display->info().width / 2, display->info().height-30, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-  display->setImage(qrCode);
-  //display->show(Inky::ShowOperation::CleanDisplay);
-  display->show();
-  
+  Gpio gpio;
+  gpio.setupLine(5, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
+  gpio.subscribe(5, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (transition == Gpio::LineTransition::FallingEdge)
+    {
+      // Get the URL to show from the HttpService
+      std::string configURL = fmt::format("http://{}", http.ListeningInterface());
+      auto qrCode = QRCode::GenerateImage(configURL);
+      qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ScaleMode::Fit, .interpolationMode = InterpolationMode::Nearest});
+      qrCode.crop(0, 0, display->info().width, display->info().height);
+      Text::Draw(configURL, qrCode, display->info().width / 2, display->info().height-50, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+      Text::Draw("Scan the QR code to upload a new photo.", qrCode, display->info().width / 2, display->info().height-30, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
+      display->setImage(qrCode);
+      display->show();
+    }
+  });
+
   http.Server().Get("/current_photo.png",
   [&](const Request &req, Response &res) 
   {
@@ -81,6 +91,7 @@ int main(int argc, char *argv[])
                 break;
             }
         }
+        res.set_redirect("/");
     }
     else 
     {

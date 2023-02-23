@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 # Define our project
 project("inky-cpp")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Create all the dependecy targets
 add_subdirectory("deps")
@@ -12,6 +12,7 @@ add_executable( ${PROJECT_NAME}
                     src/Color.cpp
                     src/Image.cpp
                     src/ImageIO.cpp
+                    src/Gpio.cpp
                     src/Text.cpp
                     src/Dither.cpp
                     src/Inky.cpp
@@ -31,6 +32,7 @@ target_link_libraries(${PROJECT_NAME} httplib
                                       magic_enum
                                       qr_code
                                       image_resampler
+                                      sigslot
                                       TinyEXIF
                                       broadcom_host)
 

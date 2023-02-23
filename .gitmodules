@@ -33,3 +33,6 @@
 [submodule "deps/TinyEXIF"]
 	path = deps/TinyEXIF
 	url = https://github.com/cdcseacave/TinyEXIF.git
+[submodule "deps/sigslot"]
+	path = deps/sigslot
+	url = https://github.com/palacaze/sigslot.git

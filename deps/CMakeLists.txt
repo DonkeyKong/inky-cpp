@@ -56,6 +56,11 @@ target_include_directories(qr_code SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/QR-
 add_library(image_resampler INTERFACE)
 target_include_directories(image_resampler SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/single-header-image-resampler)
 
+# sigslot
+add_library(sigslot INTERFACE)
+target_include_directories(sigslot SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sigslot/include)
+#target_link_libraries(sigslot INTERFACE Threads)
+
 # TinyEXIF
 add_library(TinyEXIF ${CMAKE_CURRENT_SOURCE_DIR}/TinyEXIF/TinyEXIF.cpp)
 target_compile_definitions(TinyEXIF PUBLIC "TINYEXIF_NO_XMP_SUPPORT")

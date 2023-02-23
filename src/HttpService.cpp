@@ -113,12 +113,12 @@ HttpService::HttpService()
   {
     port = srv->bind_to_any_port(addr.c_str());
 
-    serverThread = std::make_unique<std::thread>([=]()
+    serverThread = std::make_unique<std::thread>([=, this]()
                                                  { srv->listen_after_bind(); });
   }
   else
   {
-    serverThread = std::make_unique<std::thread>([=]()
+    serverThread = std::make_unique<std::thread>([=, this]()
                                                  { srv->listen(addr.c_str(), port); });
   }
 
@@ -184,12 +184,12 @@ void HttpService::setupCallbacks()
   // Add the default index handler
   if (web.count("index.html"))
   {
-    srv->Get("/", [=](const httplib::Request &req, httplib::Response &res)
+    srv->Get("/", [=, this](const httplib::Request &req, httplib::Response &res)
              { res.set_content(web["index.html"], getMimeType("index.html")); });
   }
   else if (web.count("index.htm"))
   {
-    srv->Get("/", [=](const httplib::Request &req, httplib::Response &res)
+    srv->Get("/", [=, this](const httplib::Request &req, httplib::Response &res)
              { res.set_content(web["index.htm"], getMimeType("index.htm")); });
   }
 }

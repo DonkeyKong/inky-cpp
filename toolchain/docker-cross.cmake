@@ -27,7 +27,7 @@ set(CMAKE_C_COMPILER   "/mnt/sysroot/usr/bin/arm-linux-gnueabihf-gcc")
 set(CMAKE_CXX_COMPILER "/mnt/sysroot/usr/bin/arm-linux-gnueabihf-g++")
 
 # Where GCC will look for binutils
-set(COMMON_FLAGS "-B /mnt/sysroot/usr/bin")
+set(COMMON_FLAGS "-B /mnt/sysroot/usr/bin -Wno-psabi")
 
 if(RASPBERRY_VERSION VERSION_GREATER 2)
 	set(CMAKE_C_FLAGS "-mcpu=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard ${COMMON_FLAGS}" CACHE STRING "Flags for Raspberry PI 3" FORCE)
