@@ -40,21 +40,49 @@ public:
   // May be called more than once to change settings
   // Must be called before calls to read, write, or subscribe.
   void setupLine(int line, LineMode mode, LineBias bias = LineBias::Off);
+  template <typename T>
+  void setupLine(T line, LineMode mode, LineBias bias = LineBias::Off)
+  {
+    setupLine((int)line, mode, bias);
+  }
 
   // Release a line. After calling this, read, write, and subscribe amy no longer be called.
   void releaseLine(int line);
+  template <typename T>
+  void releaseLine(T line)
+  {
+    releaseLine((int)line);
+  }
 
   // Get a line's active status as a bool, true if the line is active, false otherwise.
   bool read(int line);
+  template <typename T>
+  bool read(T line)
+  {
+    return read((int)line);
+  }
 
   // Set a line active or inactive
   void write(int line, bool value);
+  template <typename T, typename V>
+  void write(T line, V value)
+  {
+    write((int)line, (bool)value);
+  }
 
   // Subscribe to change notifications when an inout signal changes
   sigslot::connection subscribe(int line, InputChangedHandler handler);
+  template <typename T>
+  sigslot::connection subscribe(T line, InputChangedHandler handler)
+  {
+    return subscribe((int)line, handler);
+  }
 
 private:
   struct Line;
+  void setupPollfd();
+  Line& getLineFromFd(int fd);
+  std::vector<struct pollfd> pollfd_;
   std::map<int, std::unique_ptr<Line>> lines_;
   std::unique_ptr<std::thread> thread_;
   std::mutex mutex_;

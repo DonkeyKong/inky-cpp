@@ -10,6 +10,7 @@
 #include <fcntl.h> // provides open()
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <poll.h>
 #include <unistd.h> // provides close()
 #endif
 
@@ -25,16 +26,16 @@ struct Gpio::Line
   sigslot::connection subscribe(InputChangedHandler handler) { return signal_.connect(handler); }
   bool read() { return false; }
   void write(bool val) { }
-  void processEvents() { }
+  //void processEvents() { }
 };
 #else
 struct Gpio::Line
 {
   std::string gpioDevice_;
   int line_;
-  int fd_;
   LineMode mode_;
   LineBias bias_;
+  int fd_;
   sigslot::signal<int, LineTransition, std::chrono::steady_clock::time_point> signal_;
   
   static uint64_t getFlags(LineMode mode, LineBias bias)
@@ -92,6 +93,8 @@ struct Gpio::Line
       close(gpioFd);
     }
 
+    mode_ = mode;
+    bias_ = bias;
     fd_ = lineReq.fd;
 
     //changeLineMode(mode, bias);
@@ -122,7 +125,7 @@ struct Gpio::Line
   bool read()
   {
     if (fd_ == -1) throw std::runtime_error("Line is not open!");
-    if (mode_ != LineMode::Output) throw std::runtime_error("Cannot read to non-input lines!");
+    if (mode_ != LineMode::Input) throw std::runtime_error("Cannot read non-input lines!");
 
     int status;
     struct gpio_v2_line_values lv;
@@ -148,45 +151,6 @@ struct Gpio::Line
     throwIfStatusError(status, "Error writing line!");
   }
 
-  void processEvents()
-  {
-    int ret = 1;
-    ssize_t bytes;
-    fd_set set;
- 
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 10;
-
-    FD_ZERO(&set);    /* clear the set */
-    FD_SET(fd_, &set); /* add our file descriptor to the set */
-    
-    while (ret > 0)
-    {
-      ret = select(fd_ + 1, &set, NULL, NULL, &timeout);
-
-      if (ret > 0)
-      {
-        struct gpio_v2_line_event event;
-        ret = ::read(fd_, &event, sizeof(event));
-        if (ret == sizeof(event)) 
-        {
-          std::chrono::steady_clock::time_point timestamp(std::chrono::nanoseconds(event.timestamp_ns));
-          if (event.id == GPIO_V2_LINE_EVENT_RISING_EDGE)
-          {
-            signal_(line_, LineTransition::RisingEdge, timestamp);
-          }
-          else if (event.id == GPIO_V2_LINE_EVENT_FALLING_EDGE)
-          {
-            signal_(line_, LineTransition::FallingEdge, timestamp);
-          }
-        }
-      }
-    }
-
-    FD_ZERO(&set); /* clear the set */
-  }
-
   ~Line()
   {
     if (fd_ != -1)
@@ -196,6 +160,18 @@ struct Gpio::Line
   }
 };
 #endif
+
+Gpio::Line& Gpio::getLineFromFd(int fd)
+{
+  for (const auto& [i, line] : lines_)
+  {
+    if (line->fd_ == fd)
+    {
+      return *line.get();
+    }
+  }
+  throw std::runtime_error("Read file descriptor that belongs to no line!");
+}
 
 Gpio::Gpio(std::string gpioDevice):
   stopThread_(false),
@@ -207,13 +183,30 @@ Gpio::Gpio(std::string gpioDevice):
     {
       {
         std::lock_guard lock(mutex_);
-        // Iterate over all the exported lines looking for events to raise
-        for (const auto& [pin, line] : lines_)
+        if (poll(&pollfd_[0], pollfd_.size(), 16) <= 0) continue;
+        
+        for (const auto& pollfd : pollfd_)
         {
-          line->processEvents();
+          if (pollfd.revents & POLLIN)
+          {
+            struct gpio_v2_line_event event;
+            int ret = ::read(pollfd.fd, &event, sizeof(event));
+            if (ret == sizeof(event)) 
+            {
+              Line& line = getLineFromFd(pollfd.fd);
+              std::chrono::steady_clock::time_point timestamp(std::chrono::nanoseconds(event.timestamp_ns));
+              if (event.id == GPIO_V2_LINE_EVENT_RISING_EDGE)
+              {
+                line.signal_(line.line_, LineTransition::RisingEdge, timestamp);
+              }
+              else if (event.id == GPIO_V2_LINE_EVENT_FALLING_EDGE)
+              {
+                line.signal_(line.line_, LineTransition::FallingEdge, timestamp);
+              }
+            }
+          }
         }
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(16)); // throttle events
     }
   });
 }
@@ -224,6 +217,7 @@ void Gpio::setupLine(int line, LineMode mode, LineBias bias)
   if (!(lines_.count(line) > 0))
   {
     lines_.emplace(line, std::make_unique<Line>(gpioDevice_, line, mode, bias));
+    setupPollfd();
   }
   else
   {
@@ -235,6 +229,24 @@ void Gpio::releaseLine(int line)
 {
   std::lock_guard lock(mutex_);
   lines_.erase(line);
+  setupPollfd();
+}
+
+void Gpio::setupPollfd()
+{
+  pollfd_.resize(lines_.size());
+  int count = 0;
+  // Iterate over all the exported lines
+  for (const auto& [pin, line] : lines_)
+  {
+    if (line->mode_ == LineMode::Input)
+    {
+      pollfd_[count].fd = line->fd_;
+      pollfd_[count].events = POLLIN;
+      ++count;
+    }
+  }
+  pollfd_.resize(count);
 }
 
 // Get a line's active status as a bool, true if the line is active, false otherwise.

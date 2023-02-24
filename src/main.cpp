@@ -3,13 +3,15 @@
 #include "Gpio.hpp"
 #include "Image.hpp"
 #include "ImageIO.hpp"
-#include "Text.hpp"
+#include "Draw.hpp"
 #include "QRCode.hpp"
-#include <magic_enum.hpp>
-#include <iostream>
-#include <fmt/format.h>
 
+#include <magic_enum.hpp>
+#include <fmt/format.h>
 #include <signal.h>
+
+#include <iostream>
+#include <random>
 
 using namespace magic_enum::ostream_operators;
 using namespace httplib;
@@ -37,28 +39,8 @@ int main(int argc, char *argv[])
   std::cout << "\tDisplay Variant: " << display->info().displayVariant << std::endl;
   std::cout << "\tWrite Time: " << display->info().writeTime << std::endl;
 
-
-
+  // Http Service Setup
   HttpService http;
-
-  Gpio gpio;
-  gpio.setupLine(5, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
-  gpio.subscribe(5, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
-  {
-    if (transition == Gpio::LineTransition::FallingEdge)
-    {
-      // Get the URL to show from the HttpService
-      std::string configURL = fmt::format("http://{}", http.ListeningInterface());
-      auto qrCode = QRCode::GenerateImage(configURL);
-      qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ScaleMode::Fit, .interpolationMode = InterpolationMode::Nearest});
-      qrCode.crop(0, 0, display->info().width, display->info().height);
-      Text::Draw(configURL, qrCode, display->info().width / 2, display->info().height-50, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-      Text::Draw("Scan the QR code to upload a new photo.", qrCode, display->info().width / 2, display->info().height-30, {.font = Text::Font::Mono_8x12, .alignment = Text::Alignment::Center});
-      display->setImage(qrCode);
-      display->show();
-    }
-  });
-
   http.Server().Get("/current_photo.png",
   [&](const Request &req, Response &res) 
   {
@@ -108,6 +90,85 @@ int main(int argc, char *argv[])
     //             << std::endl;
     //   std::cout << "Printing first 255 chars of body:" << std::endl; 
     //   std::cout << req.body.substr(0, 255) << std::endl; 
+    }
+  });
+
+  // GPIO Setup
+  Gpio gpio;
+  gpio.setupLine(5, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
+  gpio.setupLine(6, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
+  gpio.setupLine(16, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
+  gpio.setupLine(24, Gpio::LineMode::Input, Gpio::LineBias::PullUp);
+
+  gpio.subscribe(5, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (transition == Gpio::LineTransition::FallingEdge)
+    {
+      // Get the URL to show from the HttpService
+      std::string configURL = fmt::format("http://{}", http.ListeningInterface());
+      auto qrCode = QRCode::GenerateImage(configURL);
+      qrCode.scale(display->info().width, display->info().height-50, {.scaleMode = ScaleMode::Fit, .interpolationMode = InterpolationMode::Nearest});
+      qrCode.crop(0, 0, display->info().width, display->info().height);
+      Draw::Text(qrCode, display->info().width / 2, display->info().height-50, configURL, {.hAlign = Draw::HAlign::Center});
+      Draw::Text(qrCode, display->info().width / 2, display->info().height-30, "Scan the QR code to upload a new photo.", {.hAlign = Draw::HAlign::Center});
+      display->setImage(qrCode, {.scaleMode = ScaleMode::Fill}, {.ditherAccuracy = 0});
+      display->show();
+    }
+  });
+
+  gpio.subscribe(6, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (transition == Gpio::LineTransition::FallingEdge)
+    {
+      display->show(Inky::ShowOperation::ColorTest);
+    }
+  });
+
+  gpio.subscribe(16, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (transition == Gpio::LineTransition::FallingEdge)
+    {
+      Image img(display->info().width, display->info().height);
+
+      std::random_device dev;
+      std::mt19937 rng(dev());
+      std::uniform_int_distribution<std::mt19937::result_type> randomHue(0,360);
+      std::uniform_int_distribution<std::mt19937::result_type> randomX(0,img.width());
+      std::uniform_int_distribution<std::mt19937::result_type> randomY(0,img.height());
+      std::uniform_int_distribution<std::mt19937::result_type> randomW(100,200);
+      std::uniform_int_distribution<std::mt19937::result_type> randomH(100,200);
+
+      HSVColor bgColor = { (float)randomHue(rng), 0.8f, 0.75f };
+      Draw::Box(img, 0, 0, img.width(), img.height(), {.color = bgColor.toRGB()});
+
+      for (int i=0; i < 16; ++i)
+      {
+        HSVColor color { (float)randomHue(rng), 0.8f, 0.75f };
+        Draw::Box(img, randomX(rng), randomY(rng), randomW(rng), randomH(rng), 
+                  {.hAlign = Draw::HAlign::Center, .vAlign = Draw::VAlign::Center, .color = color.toRGB()});
+      }
+
+      Draw::Box(img, img.width()/2, img.height()/2, 340, 88, {.hAlign = Draw::HAlign::Center, .vAlign = Draw::VAlign::Center, .color = {128,255,128}});
+
+      // Convert to indexed here so we can dither the boxes and not the text
+      img.toIndexed(display->getColorMap(), {.ditherAccuracy = 0.8f});
+
+      Draw::Text(img, img.width()/2, img.height()/2 - 41, "Inky Frame", {.hAlign = Draw::HAlign::Center, .font = Draw::Font::Mono_32x48});
+      Draw::Text(img, img.width()/2, img.height()/2 + 12, "Powered by inky-cpp", {.hAlign = Draw::HAlign::Center, .font = Draw::Font::Mono_8x12});
+      Draw::Text(img, img.width()/2, img.height()/2 + 28, "https://github.com/DonkeyKong/inky-cpp", {.hAlign = Draw::HAlign::Center, .font = Draw::Font::Mono_8x12});
+      
+      // Make sure the dither accuracy is set to 0 to ensure sharp pixel exact text
+      display->setImage(img, {.scaleMode = ScaleMode::Fill}, {.ditherAccuracy = 0}); 
+      
+      display->show();
+    }
+  });
+
+  gpio.subscribe(24, [&](int line, Gpio::LineTransition transition, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (transition == Gpio::LineTransition::FallingEdge)
+    {
+      display->show(Inky::ShowOperation::CleanDisplay);
     }
   });
 

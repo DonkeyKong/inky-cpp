@@ -37,17 +37,17 @@ I2CDevice::~I2CDevice()
   #endif
 }
 
-bool I2CDevice::writeI2C(uint16_t addr, const std::vector<uint8_t> &buf)
+bool I2CDevice::write(uint16_t addr, const std::vector<uint8_t> &buf)
 {
-  return writeI2C(addr, buf.data(), buf.size());
+  return write(addr, buf.data(), buf.size());
 }
 
-bool I2CDevice::readI2C(uint16_t addr, std::vector<uint8_t> &buf, double delayMs)
+bool I2CDevice::read(uint16_t addr, std::vector<uint8_t> &buf, double delayMs)
 {
-  return readI2C(addr, buf.data(), buf.size(), delayMs);
+  return read(addr, buf.data(), buf.size(), delayMs);
 }
 
-bool I2CDevice::writeI2C(uint16_t addr, const uint8_t* buf, size_t len)
+bool I2CDevice::write(uint16_t addr, const uint8_t* buf, size_t len)
 {
   std::vector<uint8_t> bufWithAddr(2 + len);
   bufWithAddr[0] = addr >> 8;
@@ -57,7 +57,7 @@ bool I2CDevice::writeI2C(uint16_t addr, const uint8_t* buf, size_t len)
     bufWithAddr[i + 2] = buf[i];
   }
   #ifndef SIMULATE_PI_HARDWARE
-  if (write(i2cFile_, bufWithAddr.data(), bufWithAddr.size()) != bufWithAddr.size()) // write() returns the number of bytes actually written, if it doesn't match then an error occurred (e.g. no response from the device)
+  if (::write(i2cFile_, bufWithAddr.data(), bufWithAddr.size()) != bufWithAddr.size()) // write() returns the number of bytes actually written, if it doesn't match then an error occurred (e.g. no response from the device)
   {
     return false;
   }
@@ -65,12 +65,12 @@ bool I2CDevice::writeI2C(uint16_t addr, const uint8_t* buf, size_t len)
   return true;
 }
 
-bool I2CDevice::readI2C(uint16_t addr, uint8_t* buf, size_t len, double delayMs)
+bool I2CDevice::read(uint16_t addr, uint8_t* buf, size_t len, double delayMs)
 {
-  writeI2C(addr);
-  delay(delayMs);
+  write(addr);
+  sleep(delayMs);
   #ifndef SIMULATE_PI_HARDWARE
-  if (read(i2cFile_, buf, len) != len) // read() returns the number of bytes actually read, if it doesn't match then an error occurred (e.g. no response from the device)
+  if (::read(i2cFile_, buf, len) != len) // read() returns the number of bytes actually read, if it doesn't match then an error occurred (e.g. no response from the device)
   {
     return false;
   }
@@ -78,7 +78,7 @@ bool I2CDevice::readI2C(uint16_t addr, uint8_t* buf, size_t len, double delayMs)
   return true;
 }
 
-void I2CDevice::delay(double milliseconds)
+void I2CDevice::sleep(double milliseconds)
 {
   if (milliseconds > 0.0)
   {

@@ -57,8 +57,9 @@ public:
   };
 
   virtual ~Inky() = 0;
-  virtual void setImage(const Image& image) = 0;
+  virtual void setImage(const Image& image, ScaleSettings scale = {.scaleMode = ScaleMode::Fill}, DitherSettings dither = {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = 0.75}) = 0;
   virtual Image getImage() const = 0;
+  virtual const IndexedColorMap& getColorMap() const = 0;
   virtual void setBorder(IndexedColor color) = 0;
   virtual void show(ShowOperation op = ShowOperation::BufferedImage) = 0;
   virtual const DisplayInfo& info() const = 0;

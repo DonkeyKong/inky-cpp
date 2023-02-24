@@ -2,18 +2,15 @@
 #include "I2CDevice.hpp"
 #include "SPIDevice.hpp"
 #include "ImageIO.hpp"
+#include "Gpio.hpp"
 
 #include <fmt/format.h>
+
+#include <mutex>
 #include <chrono>
 #include <thread>
 #include <algorithm>
 #include <stdexcept>
-
-#ifdef SIMULATE_PI_HARDWARE
-#include "minimal_gpio_nop.h"
-#else
-#include "minimal_gpio.h"
-#endif
 
 //#define DEBUG_SPI
 #ifdef DEBUG_SPI
@@ -22,8 +19,9 @@
 using namespace magic_enum::ostream_operators;
 #endif
 
-static const uint8_t InkyEEPROMI2CDeviceId = 0x50;
+static const uint8_t InkyI2CDevice = 0x50;
 static const std::string InkySPIDevice = "/dev/spidev0.0";
+static const std::string InkyGPIODevice = "/dev/gpiochip0";
 
 enum class InkyGpioPin : int
 {
@@ -105,22 +103,24 @@ enum class InkyCommand : uint8_t
 
 Inky::~Inky() {}
 
-class InkyBase : public Inky, public SPIDevice
+class InkyBase : public Inky
 {
 protected:
-
+  std::mutex mutex_;
   DisplayInfo info_;
   IndexedColor border_;
   Image buf_;
   IndexedColorMap colorMap_;
-  float ditherAccuracy_;
+  Gpio gpio_;
+  SPIDevice spi_;
 
   InkyBase(DisplayInfo info, uint32_t spiSpeedHz = 488000, uint32_t spiTransferSizeBytes = 4096, SPIMode spiMode = SPIMode::SPI_MODE_0); 
 
-  virtual void setImage(const Image& image) override;
+  virtual void setImage(const Image& image, ScaleSettings scale, DitherSettings dither) override;
   virtual Image getImage() const override;
   virtual void setBorder(IndexedColor color) override;
   virtual const DisplayInfo& info() const override;
+  virtual const IndexedColorMap& getColorMap() const override;
 
   void sendCommand(InkyCommand command);
   template <typename T> void sendCommand(InkyCommand command, const T& data);
@@ -131,8 +131,9 @@ protected:
 };
 
 InkyBase::InkyBase(DisplayInfo displayInfo, uint32_t spiSpeedHz, uint32_t spiTransferSizeBytes, SPIMode spiMode) : 
-  SPIDevice(InkySPIDevice, spiSpeedHz, spiTransferSizeBytes, spiMode),
-  info_(displayInfo)
+  info_(displayInfo),
+  gpio_(InkyGPIODevice),
+  spi_(InkySPIDevice, spiSpeedHz, spiTransferSizeBytes, spiMode)
 {
   std::vector<std::tuple<ColorName,IndexedColor,RGBAColor>> displayColors;
   switch (info_.colorCapability)
@@ -185,17 +186,21 @@ InkyBase::InkyBase(DisplayInfo displayInfo, uint32_t spiSpeedHz, uint32_t spiTra
   colorMap_ = IndexedColorMap(displayColors);
   //colorMap_.normalizePaletteByLab(false, true);
   border_ = colorMap_.toIndexedColor(ColorName::White);
-  ditherAccuracy_ = 0.75f;
   buf_ = Image(info_.width, info_.height, colorMap_);
+}
+
+const IndexedColorMap& InkyBase::getColorMap() const
+{
+  return colorMap_;
 }
 
 void InkyBase::sendCommand(InkyCommand command)
 {
-  gpioWrite(InkyGpioPin::DC_PIN, 0);
+  gpio_.write(InkyGpioPin::DC_PIN, false);
   #ifdef DEBUG_SPI
   std::cout << "Command " << command << " ret: " << 
   #endif
-  writeSPI((uint8_t*)(&command), 1);
+  spi_.write((uint8_t*)(&command), 1);
   #ifdef DEBUG_SPI
   std::cout << std::endl;
   #endif
@@ -234,11 +239,11 @@ void InkyBase::sendCommand(InkyCommand command, const T& data)
     static_assert(std::is_trivial<T>() && std::is_standard_layout<T>(), "Unsupported data type!");
   }
 
-  gpioWrite(InkyGpioPin::DC_PIN, 1);
+  gpio_.write(InkyGpioPin::DC_PIN, true);
   #ifdef DEBUG_SPI
   std::cout << "Sent buffer len " << len << " ret: " << 
   #endif
-  writeSPI(dataPtr, len);
+  spi_.write(dataPtr, len);
   #ifdef DEBUG_SPI
   std::cout << std::endl;
   #endif
@@ -249,11 +254,12 @@ const Inky::DisplayInfo& InkyBase::info() const
   return info_;
 }
 
-void InkyBase::setImage(const Image& image)
+void InkyBase::setImage(const Image& image, ScaleSettings scale, DitherSettings dither)
 {
+  std::lock_guard lock(mutex_);
   buf_ = image;
-  buf_.scale(info_.width, info_.height, {ScaleMode::Fill});
-  buf_.toIndexed(colorMap_, {.ditherMode = DitherMode::Diffusion, .ditherAccuracy = ditherAccuracy_});
+  buf_.scale(info_.width, info_.height, scale);
+  buf_.toIndexed(colorMap_, dither);
 }
 
 Image InkyBase::getImage() const
@@ -263,6 +269,7 @@ Image InkyBase::getImage() const
 
 void InkyBase::setBorder(IndexedColor inky)
 {
+  std::lock_guard lock(mutex_);
   border_ = inky;
 }
 
@@ -362,6 +369,7 @@ SimulatedInky::SimulatedInky() : InkyBase(
 
 void SimulatedInky::show(ShowOperation op)
 {
+  std::lock_guard lock(mutex_);
   // Write the images to display RAM
   if (op == ShowOperation::BufferedImage)
   {
@@ -396,29 +404,20 @@ InkySSD1683::InkySSD1683(DisplayInfo info) : InkyBase(info, SPIDeviceSpeedHz)
     throw std::runtime_error("Unsupported Inky display type!!");
   }
 
-  ditherAccuracy_ = 0.75f;
-
   // Setup the GPIO pins
-  if (gpioInitialise() < 0)
-  {
-      throw std::runtime_error("Failed to setup GPIO\n");
-  }
-  gpioSetMode(InkyGpioPin::DC_PIN, PI_OUTPUT);
-  gpioSetPullUpDown(InkyGpioPin::DC_PIN, PI_PUD_OFF);
-  gpioWrite(InkyGpioPin::DC_PIN, 0);
-  gpioSetMode(InkyGpioPin::RESET_PIN, PI_OUTPUT);
-  gpioSetPullUpDown(InkyGpioPin::RESET_PIN, PI_PUD_OFF);
-  gpioWrite(InkyGpioPin::RESET_PIN, 1);
-  gpioSetMode(InkyGpioPin::BUSY_PIN, PI_INPUT);
-  gpioSetPullUpDown(InkyGpioPin::BUSY_PIN, PI_PUD_OFF);
+  gpio_.setupLine(InkyGpioPin::DC_PIN, Gpio::LineMode::Output);
+  gpio_.write(InkyGpioPin::DC_PIN, false);
+  gpio_.setupLine(InkyGpioPin::RESET_PIN, Gpio::LineMode::Output);
+  gpio_.write(InkyGpioPin::RESET_PIN, true);
+  gpio_.setupLine(InkyGpioPin::BUSY_PIN, Gpio::LineMode::Input);
 }
 
 void InkySSD1683::reset()
 {
   // Perform a hardware reset
-  gpioWrite(InkyGpioPin::RESET_PIN, 0);
+  gpio_.write(InkyGpioPin::RESET_PIN, false);
   sleep(500);
-  gpioWrite(InkyGpioPin::RESET_PIN, 1);
+  gpio_.write(InkyGpioPin::RESET_PIN, true);
   sleep(500);
   sendCommand(InkyCommand::SSD1683_SW_RESET);
   sleep(1000);
@@ -428,7 +427,7 @@ void InkySSD1683::reset()
 void InkySSD1683::waitForBusy(int timeoutMs)
 {
   int i = 0;
-  while (gpioRead(InkyGpioPin::BUSY_PIN) != 0)
+  while (gpio_.read(InkyGpioPin::BUSY_PIN) != 0)
   {
     sleep(10);
     ++i;
@@ -441,6 +440,8 @@ void InkySSD1683::waitForBusy(int timeoutMs)
 
 void InkySSD1683::show(ShowOperation op)
 {
+  std::lock_guard lock(mutex_);
+
   reset();
 
   sendCommand(InkyCommand::SSD1683_DRIVER_CONTROL, (uint8_t[]){(uint8_t)(info_.height - 1), (uint8_t)((info_.height - 1) >> 8), 0x00});
@@ -575,34 +576,20 @@ InkyUC8159::InkyUC8159(DisplayInfo info) : InkyBase(info, DefaultSPIDeviceSpeedH
   info_.width = correctionData.cols;
   info_.height = correctionData.rows;
   buf_ = Image(info_.width, info_.height, colorMap_);
-  ditherAccuracy_ = 0.7f;
 
   // Setup the GPIO pins
-  if (gpioInitialise() < 0)
-  {
-      throw std::runtime_error("Failed to setup GPIO\n");
-  }
-
-  //gpioSetMode(InkyGpioPin::CS0_PIN, PI_OUTPUT);
-  //gpioWrite(InkyGpioPin::CS0_PIN, 1);
-
-  gpioSetMode(InkyGpioPin::DC_PIN, PI_OUTPUT);
-  gpioSetPullUpDown(InkyGpioPin::DC_PIN, PI_PUD_OFF);
-  gpioWrite(InkyGpioPin::DC_PIN, 0);
-
-  gpioSetMode(InkyGpioPin::RESET_PIN, PI_OUTPUT);
-  gpioSetPullUpDown(InkyGpioPin::RESET_PIN, PI_PUD_OFF);
-  gpioWrite(InkyGpioPin::RESET_PIN, 1);
-
-  gpioSetMode(InkyGpioPin::BUSY_PIN, PI_INPUT);
-  gpioSetPullUpDown(InkyGpioPin::BUSY_PIN, PI_PUD_OFF);
+  gpio_.setupLine(InkyGpioPin::DC_PIN, Gpio::LineMode::Output);
+  gpio_.write(InkyGpioPin::DC_PIN, false);
+  gpio_.setupLine(InkyGpioPin::RESET_PIN, Gpio::LineMode::Output);
+  gpio_.write(InkyGpioPin::RESET_PIN, true);
+  gpio_.setupLine(InkyGpioPin::BUSY_PIN, Gpio::LineMode::Input);
 }
 
 void InkyUC8159::reset()
 {
-    gpioWrite(InkyGpioPin::RESET_PIN, 0);
+    gpio_.write(InkyGpioPin::RESET_PIN, false);
     sleep(100);
-    gpioWrite(InkyGpioPin::RESET_PIN, 1);
+    gpio_.write(InkyGpioPin::RESET_PIN, true);
 
     waitForBusy(1000);
 
@@ -678,14 +665,14 @@ void InkyUC8159::waitForBusy(int timeoutMs)
   // If the busy_pin is *high* (pulled up by host)
   // then assume we're not getting a signal from inky
   // and wait the timeout period to be safe.
-  if (gpioRead(InkyGpioPin::BUSY_PIN) == 1)
+  if (gpio_.read(InkyGpioPin::BUSY_PIN) == 1)
   {
     sleep(timeoutMs);
     return;
   }
 
   int i = 0;
-  while (gpioRead(InkyGpioPin::BUSY_PIN) == 0)
+  while (gpio_.read(InkyGpioPin::BUSY_PIN) == 0)
   {
     sleep(10);
     ++i;
@@ -698,6 +685,8 @@ void InkyUC8159::waitForBusy(int timeoutMs)
 
 void InkyUC8159::show(ShowOperation op)
 {
+  std::lock_guard lock(mutex_);
+
   if (op == ShowOperation::BufferedImage)
   {
     generatePackedIndex(buf_, packed);
@@ -743,11 +732,11 @@ static void write16(uint16_t val, uint8_t* buf)
 
 Inky::DisplayInfo readEeprom()
 {
-  I2CDevice eeprom(InkyEEPROMI2CDeviceId);
+  I2CDevice eeprom(InkyI2CDevice);
   // eeprom format is python struct '<HHBBB22p'
   // width, height, color, pcb_variant, display_variant, write_time
   uint8_t rom[30];
-  eeprom.readI2C(0, rom, 29);
+  eeprom.read(0, rom, 29);
 
   // Get the length of the writeTime string and null terminate it
   // The data could lie about length, so cap it to 21

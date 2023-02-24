@@ -1,9 +1,9 @@
-#include "Text.hpp"
+#include "Draw.hpp"
 #include "Dither.hpp"
 #include <unordered_map>
 #include <ImageIO.hpp>
 
-namespace Text
+namespace Draw
 {
 
 static Image loadFont(const std::string& path)
@@ -25,6 +25,7 @@ const static std::unordered_map<Font, Image> Fonts
   {Font::Mono_4x6,  loadFont("resources/font_4x6.png")},
   {Font::Mono_6x6,  loadFont("resources/font_6x6.png")},
   {Font::Mono_8x12, loadFont("resources/font_8x12.png")},
+  {Font::Mono_32x48, loadFont("resources/font_32x48.png")},
 };
 
 template <typename PixelType>
@@ -61,19 +62,28 @@ static inline void characterBlit(const char character, const int x, const int y,
   }
 }
 
-void Draw(const std::string& str, Image& dest, int x, int y, TextStyle style)
+void Text(Image& dest, int x, int y, const std::string& str, TextStyle style)
 {
   const Image& font = Fonts.at(style.font);
   int charWidth = font.width() / 16;
   int charHeight = font.height() / 16;
 
-  if (style.alignment == Alignment::Center)
+  if (style.hAlign == HAlign::Center)
   {
     x -= ((str.size() * charWidth) / 2);
   }
-  else if (style.alignment == Alignment::Right)
+  else if (style.hAlign == HAlign::Right)
   {
     x -= (str.size() * charWidth);
+  }
+
+  if (style.vAlign == VAlign::Center)
+  {
+    y -= (charHeight / 2);
+  }
+  else if (style.vAlign == VAlign::Bottom)
+  {
+    y -= charHeight;
   }
 
   if (dest.format() == PixelFormat::RGBA)
@@ -101,7 +111,60 @@ void Draw(const std::string& str, Image& dest, int x, int y, TextStyle style)
       x += charWidth;
     }
   }
-  
+}
+
+template <typename PixelType>
+static inline void fill(BoundingBox fillArea, const PixelType& color, PixelType* destData, const BoundingBox& destBox)
+{
+  // Clip the char box to the dest box
+  fillArea.clipTo(destBox);
+
+  // Check if there's any blittable area left
+  if (fillArea.width > 0 && fillArea.height > 0)
+  {
+    // Now it should be safe to blindly blit the charBox on to destData
+    for (int iY = 0; iY < fillArea.height; ++iY)
+    {
+      for (int iX = 0; iX < fillArea.width; ++iX)
+      {
+        //if ()
+        //{
+          destData[iX+fillArea.x+(iY+fillArea.y)*destBox.width] = color;
+        //}
+      }
+    }
+  }
+}
+
+void Box(Image& dest, int x, int y, int width, int height, BoxStyle style)
+{
+  if (style.hAlign == HAlign::Center)
+  {
+    x -= (width / 2);
+  }
+  else if (style.hAlign == HAlign::Right)
+  {
+    x -= width;
+  }
+
+  if (style.vAlign == VAlign::Center)
+  {
+    y -= (height / 2);
+  }
+  else if (style.vAlign == VAlign::Bottom)
+  {
+    y -= height;
+  }
+
+  if (dest.format() == PixelFormat::RGBA)
+  {
+    fill<RGBAColor>({x,y,width,height}, style.color, (RGBAColor*)dest.data(), dest.bounds());
+  }
+  else
+  {
+    IndexedColor color = dest.colorMap().toIndexedColor(style.color);
+    fill<IndexedColor>({x,y,width,height}, color, (IndexedColor*)dest.data(), dest.bounds());
+  }
 }
 
 }

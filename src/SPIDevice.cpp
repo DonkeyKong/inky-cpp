@@ -74,17 +74,17 @@ SPIDevice::~SPIDevice()
   #endif
 }
 
-int SPIDevice::writeSPI(const std::vector<uint8_t> &buf, uint16_t delayUs)
+int SPIDevice::write(const std::vector<uint8_t> &buf, uint16_t delayUs)
 {
-  return writeSPI(buf.data(), buf.size(), delayUs);
+  return write(buf.data(), buf.size(), delayUs);
 }
 
-int SPIDevice::readSPI(std::vector<uint8_t> &buf, uint16_t delayUs)
+int SPIDevice::read(std::vector<uint8_t> &buf, uint16_t delayUs)
 {
-  return readSPI(buf.data(), buf.size(), delayUs);
+  return read(buf.data(), buf.size(), delayUs);
 }
 
-int SPIDevice::writeSPI(const uint8_t* buf, size_t len, uint16_t delayUs)
+int SPIDevice::write(const uint8_t* buf, size_t len, uint16_t delayUs)
 {
   int ret = 0;
   #ifndef SIMULATE_PI_HARDWARE
@@ -112,7 +112,7 @@ int SPIDevice::writeSPI(const uint8_t* buf, size_t len, uint16_t delayUs)
   return ret;
 }
 
-int SPIDevice::readSPI(uint8_t* buf, size_t len, uint16_t delayUs)
+int SPIDevice::read(uint8_t* buf, size_t len, uint16_t delayUs)
 {
   int ret = 0;
   #ifndef SIMULATE_PI_HARDWARE

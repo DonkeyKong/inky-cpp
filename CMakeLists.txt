@@ -13,7 +13,7 @@ add_executable( ${PROJECT_NAME}
                     src/Image.cpp
                     src/ImageIO.cpp
                     src/Gpio.cpp
-                    src/Text.cpp
+                    src/Draw.cpp
                     src/Dither.cpp
                     src/Inky.cpp
                     src/I2CDevice.cpp
