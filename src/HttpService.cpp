@@ -196,6 +196,7 @@ void HttpService::setupCallbacks()
 
 std::string HttpService::ListeningInterface()
 {
+  listeningInterface = getFirstExternalHostAddr();
   return listeningInterface;
 }
 
