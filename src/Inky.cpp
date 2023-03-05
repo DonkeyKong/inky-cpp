@@ -2,8 +2,8 @@
 #include "I2CDevice.hpp"
 #include "SPIDevice.hpp"
 #include "ImageIO.hpp"
-#include "Gpio.hpp"
 
+#include <gpio-cpp/gpio.hpp>
 #include <fmt/format.h>
 
 #include <mutex>

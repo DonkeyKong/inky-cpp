@@ -36,3 +36,6 @@
 [submodule "deps/sigslot"]
 	path = deps/sigslot
 	url = https://github.com/palacaze/sigslot.git
+[submodule "deps/gpio-cpp"]
+	path = deps/gpio-cpp
+	url = https://github.com/DonkeyKong/gpio-cpp

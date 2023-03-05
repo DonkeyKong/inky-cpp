@@ -9,6 +9,9 @@ add_library(fmt INTERFACE)
 target_compile_definitions(fmt INTERFACE "FMT_HEADER_ONLY")
 target_include_directories(fmt SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include)
 
+# gpio-cpp
+add_subdirectory("gpio-cpp")
+
 # json - Cmake, header-only
 add_library(json INTERFACE)
 target_include_directories(json SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/json/include)
@@ -57,9 +60,10 @@ add_library(image_resampler INTERFACE)
 target_include_directories(image_resampler SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/single-header-image-resampler)
 
 # sigslot
-add_library(sigslot INTERFACE)
-target_include_directories(sigslot SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sigslot/include)
-#target_link_libraries(sigslot INTERFACE Threads)
+if(NOT TARGET sigslot)
+  add_library(sigslot INTERFACE)
+  target_include_directories(sigslot SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sigslot/include)
+endif()
 
 # TinyEXIF
 add_library(TinyEXIF ${CMAKE_CURRENT_SOURCE_DIR}/TinyEXIF/TinyEXIF.cpp)

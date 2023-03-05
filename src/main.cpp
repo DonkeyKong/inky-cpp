@@ -1,11 +1,11 @@
 #include "Inky.hpp"
 #include "HttpService.hpp"
-#include "Gpio.hpp"
 #include "Image.hpp"
 #include "ImageIO.hpp"
 #include "Draw.hpp"
 #include "QRCode.hpp"
 
+#include <gpio-cpp/gpio.hpp>
 #include <magic_enum.hpp>
 #include <fmt/format.h>
 #include <signal.h>

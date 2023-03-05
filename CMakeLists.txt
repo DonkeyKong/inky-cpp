@@ -12,7 +12,6 @@ add_executable( ${PROJECT_NAME}
                     src/Color.cpp
                     src/Image.cpp
                     src/ImageIO.cpp
-                    src/Gpio.cpp
                     src/Draw.cpp
                     src/Dither.cpp
                     src/Inky.cpp
@@ -26,6 +25,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 target_link_libraries(${PROJECT_NAME} httplib 
                                       fmt 
+                                      gpio-cpp
                                       json 
                                       libjpeg
                                       libpng
